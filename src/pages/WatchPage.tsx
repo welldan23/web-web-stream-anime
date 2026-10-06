@@ -209,7 +209,7 @@ export default function WatchPage() {
 
           {serverError ? <Notice tone="danger">Server ini lagi bermasalah. Coba pilih server lain.</Notice> : null}
           {autoFailed ? (
-            <Notice>Vidhide & Mega lagi nggak bisa buat episode ini, jadi diputar pakai player bawaan.</Notice>
+            <Notice>Server lancar lagi nggak bisa buat episode ini, jadi diputar pakai player bawaan.</Notice>
           ) : null}
 
           <div className="space-y-2">
@@ -250,9 +250,22 @@ export default function WatchPage() {
                 </div>
               </details>
             </Card>
-            <p className="px-1 text-xs text-ink-muted">
-              Server lancar dipilih otomatis. Pilihan kamu diingat buat episode berikutnya.
-            </p>
+            <div className="flex items-start justify-between gap-3 px-1">
+              <p className="text-xs text-ink-muted">
+                Server lancar dipilih otomatis. Pilihan kamu diingat buat episode berikutnya.
+              </p>
+              {src ? (
+                // cadangan kalau player nggak mau jalan di dalam web: buka langsung di tab baru
+                <a
+                  href={src}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-500 hover:underline"
+                >
+                  Buka di tab baru <ExternalLink className="size-3" />
+                </a>
+              ) : null}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -286,10 +299,10 @@ export default function WatchPage() {
               </label>
             </Card>
             {sandboxSkipped ? (
-              <Notice>
+              <p className="px-1 text-xs text-warning-600">
                 {serverLabel(sandboxSkipped)} nolak muter kalau pop-up diblokir, jadi buat server ini blokirnya
-                dilewatin. Pilih server lain kalau mau bebas pop-up.
-              </Notice>
+                dilewatin.
+              </p>
             ) : null}
             <p className="px-1 text-xs text-ink-muted">
               Iklan yang tampil di dalam video berasal dari server videonya, jadi nggak bisa dihapus dari sini.

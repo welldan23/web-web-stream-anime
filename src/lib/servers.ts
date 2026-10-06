@@ -1,10 +1,10 @@
 // Aturan pilih server streaming.
-// Dari pengalaman, server otakudesu yang lancar cuma Vidhide & Mega; sisanya
-// (player bawaan, ondesu, filedon, dll) sering gagal. Kalau nanti ada server
+// Dari pengalaman, server otakudesu yang lancar cuma Vidhide; sisanya
+// (player bawaan, Mega, ondesu, filedon, dll) sering gagal / nggak mau muter. Kalau nanti ada server
 // lain yang lancar, tinggal tambahin namanya di sini (urutan = prioritas).
 import type { Quality, Server } from './api'
 
-export const RELIABLE_SERVERS = ['vidhide', 'mega']
+export const RELIABLE_SERVERS = ['vidhide']
 
 const QUALITY_ORDER = ['720p', '480p', '360p']
 const PREF_KEY = 'animeku:player'
