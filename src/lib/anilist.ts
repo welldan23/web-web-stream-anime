@@ -150,6 +150,22 @@ export function scoreCandidate(c: AniListCandidate, title: string, japanese?: st
 
 const MIN_SCORE = 0.6
 
+/**
+ * Pilih item yang judulnya paling mirip sama salah satu `names` (nomor season harus sama).
+ * Dipakai buat nyocokin judul antar sumber (AniList, trace.moe, otakudesu, kuramanime).
+ */
+export function bestTitleMatch<T>(items: T[], getTitle: (item: T) => string, names: string[], min = MIN_SCORE) {
+  const wanted = Math.max(1, ...names.map((n) => seasonNumber(n) ?? 1))
+  let best: { item: T; score: number } | null = null
+  for (const item of items) {
+    const title = cleanTitle(getTitle(item))
+    let score = Math.max(0, ...names.map((n) => similarity(title, cleanTitle(n))))
+    if ((seasonNumber(title) ?? 1) !== wanted) score -= 0.25
+    if (!best || score > best.score) best = { item, score }
+  }
+  return best && best.score >= min ? best.item : null
+}
+
 export function pickBest(candidates: AniListCandidate[], title: string, japanese?: string) {
   let best: { c: AniListCandidate; score: number } | null = null
   for (const c of candidates) {

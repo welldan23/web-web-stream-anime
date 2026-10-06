@@ -19,6 +19,8 @@ import { recordWatch, useLibrary } from '../lib/library'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { cn } from '../lib/cn'
 import Seo from '../components/Seo'
+import DirectPlayer from '../components/DirectPlayer'
+import { findDirectSources, preferredQuality, rememberQuality } from '../lib/kuramanime'
 import { ApiError } from '../lib/api'
 import { DEFAULT_DESCRIPTION, episodeMeta, pageTitle, titleFromSlug } from '../lib/site'
 import { SITE_URL } from '../lib/siteUrl'
@@ -44,10 +46,30 @@ export default function WatchPage() {
   })
 
   const ep = episode.data
+  const epNumber = ep ? episodeNumber(ep.title) : null
   const options = useMemo(() => flattenServers(ep?.server.qualityList ?? []), [ep])
   const [blockPopups, setBlockPopups] = useState(readBlockPopups)
   const candidates = useMemo(() => autoCandidates(options, blockPopups), [options, blockPopups])
   const manual = picked?.episodeId === episodeId ? picked.serverId : null
+  // 'direct:720p' = user milih kualitas tertentu di server bebas iklan
+  const manualDirect = manual?.startsWith('direct:') ? manual.slice('direct:'.length) : null
+
+  // Server bebas iklan: cari episode yang sama di Kuramanime (link video langsung)
+  const animeTitle = anime.data?.title
+  const direct = useQuery({
+    queryKey: ['direct', ep?.animeId, epNumber],
+    queryFn: () => findDirectSources(animeTitle!, epNumber!),
+    enabled: Boolean(animeTitle) && epNumber !== null,
+    staleTime: 1000 * 60 * 30,
+    retry: false,
+  })
+  // episode yang video bebas iklannya gagal diputar → jangan dicoba lagi, pakai server biasa
+  const [directFailed, setDirectFailed] = useState<string | null>(null)
+  const directSources = directFailed === episodeId ? [] : (direct.data?.sources ?? [])
+  const useDirect = directSources.length > 0 && (!manual || manualDirect !== null)
+  const directQuality = manualDirect ?? preferredQuality(directSources)
+  // tunggu hasil pencarian bebas iklan dulu sebelum muter server biasa, biar player nggak gonta-ganti
+  const deciding = !manual && (anime.isLoading || direct.isLoading)
 
   // Otomatis: coba server andalan satu per satu sampai ada yang ngasih link
   const auto = useQuery({
@@ -59,7 +81,7 @@ export default function WatchPage() {
       }
       return null
     },
-    enabled: Boolean(ep) && !manual && candidates.length > 0,
+    enabled: Boolean(ep) && !manual && candidates.length > 0 && !deciding && !useDirect,
     staleTime: 1000 * 60 * 30,
     retry: false,
   })
@@ -68,7 +90,7 @@ export default function WatchPage() {
   const chosen = useQuery({
     queryKey: ['server', manual],
     queryFn: () => api.server(manual!),
-    enabled: Boolean(manual) && manual !== 'default',
+    enabled: Boolean(manual) && manual !== 'default' && !manualDirect,
     staleTime: 1000 * 60 * 30,
     retry: false,
   })
@@ -79,8 +101,9 @@ export default function WatchPage() {
   }
 
   const usingAuto = !manual && candidates.length > 0
-  const activeServer = manual ?? (usingAuto ? (auto.data?.serverId ?? (auto.data === null ? 'default' : null)) : 'default')
-  const src = manual
+  const iframeServer = manual ?? (usingAuto ? (auto.data?.serverId ?? (auto.data === null ? 'default' : null)) : 'default')
+  const activeServer = useDirect ? `direct:${directQuality}` : iframeServer
+  const iframeSrc = manual
     ? manual === 'default'
       ? ep?.defaultStreamingUrl
       : chosen.data
@@ -89,10 +112,22 @@ export default function WatchPage() {
         ? ep?.defaultStreamingUrl
         : auto.data?.url
       : ep?.defaultStreamingUrl
+  const directUrl = directSources.find((s) => s.quality === directQuality)?.url ?? directSources[0]?.url
+  const src = useDirect ? directUrl : iframeSrc
   const playerLoading =
-    episode.isLoading || (manual ? manual !== 'default' && chosen.isLoading : usingAuto && auto.isLoading)
-  const serverError = manual && manual !== 'default' && chosen.isError
-  const autoFailed = !manual && usingAuto && auto.data === null
+    episode.isLoading ||
+    (!useDirect &&
+      (deciding || (manual ? manual !== 'default' && chosen.isLoading : usingAuto && auto.isLoading)))
+  const serverError = !useDirect && manual && manual !== 'default' && chosen.isError
+  const autoFailed = !useDirect && !manual && usingAuto && auto.data === null
+  const pickDirect = (quality: string) => {
+    rememberQuality(quality)
+    setPicked({ episodeId, serverId: `direct:${quality}` })
+  }
+  const onDirectFail = () => {
+    setDirectFailed(episodeId)
+    if (manualDirect) setPicked(null)
+  }
 
   // simpan ke riwayat setelah data episode (dan anime, kalau ada) kelar dimuat
   const animeSettled = !animeId || anime.isSuccess || anime.isError
@@ -144,9 +179,8 @@ export default function WatchPage() {
   const activeOption = options.find((o) => o.serverId === activeServer)
   // sebagian server (Vidhide) nolak muter kalau di-sandbox, jadi blokir pop-up dilewati buat server itu
   const sandboxed = blockPopups && canSandbox(activeOption)
-  const sandboxSkipped = blockPopups && !sandboxed && activeOption
+  const sandboxSkipped = !useDirect && blockPopups && !sandboxed && activeOption
   const downloads = ep?.download.qualityList.filter((q) => q.urlList && q.urlList.length > 0) ?? []
-  const epNumber = ep ? episodeNumber(ep.title) : null
 
   return (
     <div className="space-y-4">
@@ -170,6 +204,8 @@ export default function WatchPage() {
               <div className="absolute inset-0 grid place-items-center">
                 <Loader2 className="size-8 animate-spin text-white/70" />
               </div>
+            ) : useDirect && directQuality ? (
+              <DirectPlayer key={episodeId} episodeId={episodeId} sources={directSources} quality={directQuality} onFail={onDirectFail} />
             ) : src ? (
               <iframe
                 // key ikut status blokir: atribut sandbox cuma kebaca waktu iframe dibuat ulang
@@ -207,6 +243,9 @@ export default function WatchPage() {
             </div>
           </Card>
 
+          {directFailed === episodeId ? (
+            <Notice>Server bebas iklan nggak bisa diputar buat episode ini, jadi pindah ke server biasa.</Notice>
+          ) : null}
           {serverError ? <Notice tone="danger">Server ini lagi bermasalah. Coba pilih server lain.</Notice> : null}
           {autoFailed ? (
             <Notice>Server lancar lagi nggak bisa buat episode ini, jadi diputar pakai player bawaan.</Notice>
@@ -215,6 +254,30 @@ export default function WatchPage() {
           <div className="space-y-2">
             <GroupTitle>Server</GroupTitle>
             <Card className="px-4">
+              {directSources.length > 0 ? (
+                <div className="border-b border-line py-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+                    <ShieldCheck className="size-4 text-success-500" /> Bebas iklan
+                    <span className="font-normal text-ink-muted">· Kuramanime</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {directSources.map((d) => (
+                      <Chip
+                        size="sm"
+                        key={d.quality}
+                        active={activeServer === `direct:${d.quality}`}
+                        onClick={() => pickDirect(d.quality)}
+                      >
+                        {d.quality}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              ) : direct.isLoading ? (
+                <p className="flex items-center gap-2 border-b border-line py-3 text-xs text-ink-muted">
+                  <Loader2 className="size-3.5 animate-spin" /> Lagi nyari server bebas iklan…
+                </p>
+              ) : null}
               {reliable.length > 0 ? (
                 <div className="py-3">
                   <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">

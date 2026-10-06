@@ -2,7 +2,7 @@
 // Gratis tanpa API key, tapi ada kuota per IP (±1000 pencarian/bulan) dan
 // batas ukuran gambar 25 MB. Hasilnya dicocokin ke otakudesu biar bisa langsung nonton.
 import { api, type AnimeRef, type SearchedAnime } from './api'
-import { cleanTitle, seasonNumber, similarity } from './anilist'
+import { bestTitleMatch, cleanTitle } from './anilist'
 import { episodeNumber } from './episodes'
 
 const TRACE_URL = 'https://api.trace.moe/search'
@@ -127,20 +127,6 @@ export interface OtakudesuMatch {
   episodeId: string | null
 }
 
-const MIN_SCORE = 0.6
-
-function bestSearchMatch(list: SearchedAnime[], names: string[]) {
-  const wanted = Math.max(1, ...names.map((n) => seasonNumber(n) ?? 1))
-  let best: { a: SearchedAnime; score: number } | null = null
-  for (const a of list) {
-    const title = cleanTitle(a.title)
-    let score = Math.max(0, ...names.map((n) => similarity(title, n)))
-    if ((seasonNumber(title) ?? 1) !== wanted) score -= 0.25
-    if (!best || score > best.score) best = { a, score }
-  }
-  return best && best.score >= MIN_SCORE ? best.a : null
-}
-
 /** Cari anime yang sama di otakudesu (pakai judul romaji/inggris), lalu cari episodenya. */
 export async function findOnOtakudesu(r: TraceResult): Promise<OtakudesuMatch | null> {
   const t = r.anilist.title
@@ -150,7 +136,7 @@ export async function findOnOtakudesu(r: TraceResult): Promise<OtakudesuMatch | 
   let anime: SearchedAnime | null = null
   for (const q of queries) {
     const list = await api.search(q).catch(() => [])
-    anime = bestSearchMatch(list, names)
+    anime = bestTitleMatch(list, (a) => a.title, names)
     if (anime) break
   }
   if (!anime) return null

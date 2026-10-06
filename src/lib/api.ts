@@ -142,13 +142,21 @@ export class ApiError extends Error {
   }
 }
 
-async function get<T>(path: string, params?: Record<string, string | number | undefined>) {
+type Params = Record<string, string | number | undefined>
+
+/** Ambil data dari salah satu sumber wajik-anime-api (otakudesu, kuramanime, ...). */
+export async function getFrom<T>(
+  source: string,
+  path: string,
+  params?: Params,
+  init?: RequestInit,
+) {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined && value !== '') query.set(key, String(value))
   }
   const qs = query.toString()
-  const res = await fetch(`${API_URL}/${SOURCE}${path}${qs ? `?${qs}` : ''}`)
+  const res = await fetch(`${API_URL}/${source}${path}${qs ? `?${qs}` : ''}`, init)
 
   let body: Payload<T> | null = null
   try {
@@ -163,6 +171,10 @@ async function get<T>(path: string, params?: Record<string, string | number | un
   }
 
   return { data: body.data, pagination: body.pagination }
+}
+
+function get<T>(path: string, params?: Params) {
+  return getFrom<T>(SOURCE, path, params)
 }
 
 export const api = {
