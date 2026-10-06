@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #0b0b12;
+  --color-surface: #13131d;
+  --color-surface-2: #1b1b28;
+  --color-line: #262636;
+  --color-muted: #8b8ba3;
+  --color-accent: #f43f5e;
+  --color-accent-2: #8b5cf6;
+  --animate-fade-in: fade-in 0.5s ease both;
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-bg text-zinc-100 antialiased;
+    min-height: 100dvh;
+  }
+  ::selection {
+    @apply bg-accent/40;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .text-gradient {
+    @apply bg-gradient-to-r from-accent to-accent-2 bg-clip-text text-transparent;
+  }
+}
+
+/* scrollbar tipis buat panel episode */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
