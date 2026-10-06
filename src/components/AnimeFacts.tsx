@@ -93,7 +93,7 @@ export function DailyFactCard() {
       fact={item.fact}
       onNext={() => setOffset((o) => o + 1)}
       footer={
-        // cari pakai judul romaji (alias pertama), karena judul Kuramanime biasanya romaji (mis. "Kimetsu no Yaiba")
+        // cari pakai judul romaji (alias pertama), karena judul otakudesu biasanya romaji (mis. "Kimetsu no Yaiba")
         <Link
           to={`/cari?q=${encodeURIComponent(item.group.aliases[0])}`}
           className="shrink-0 text-[13px] font-semibold text-primary-500 hover:underline"

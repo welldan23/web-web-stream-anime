@@ -14,8 +14,7 @@ const OngoingPage = lazy(() => browse().then((m) => ({ default: m.OngoingPage })
 const CompletedPage = lazy(() => browse().then((m) => ({ default: m.CompletedPage })))
 const GenresPage = lazy(() => browse().then((m) => ({ default: m.GenresPage })))
 const GenrePage = lazy(() => browse().then((m) => ({ default: m.GenrePage })))
-const AllAnimePage = lazy(() => browse().then((m) => ({ default: m.AllAnimePage })))
-const MoviePage = lazy(() => browse().then((m) => ({ default: m.MoviePage })))
+const AzPage = lazy(() => browse().then((m) => ({ default: m.AzPage })))
 const SearchPage = lazy(() => browse().then((m) => ({ default: m.SearchPage })))
 const WatchlistPage = lazy(() => library().then((m) => ({ default: m.WatchlistPage })))
 const HistoryPage = lazy(() => library().then((m) => ({ default: m.HistoryPage })))
@@ -29,14 +28,13 @@ export default function App() {
         <Route path="jadwal" element={<SchedulePage />} />
         <Route path="ongoing" element={<OngoingPage />} />
         <Route path="tamat" element={<CompletedPage />} />
-        <Route path="film" element={<MoviePage />} />
         <Route path="genre" element={<GenresPage />} />
         <Route path="genre/:genreId" element={<GenrePage />} />
-        <Route path="daftar" element={<AllAnimePage />} />
+        <Route path="daftar" element={<AzPage />} />
         <Route path="cari" element={<SearchPage />} />
         <Route path="cari-gambar" element={<ImageSearchPage />} />
-        <Route path="anime/:animeId/:slug" element={<AnimePage />} />
-        <Route path="nonton/:animeId/:slug/:episode" element={<WatchPage />} />
+        <Route path="anime/:animeId" element={<AnimePage />} />
+        <Route path="nonton/:episodeId" element={<WatchPage />} />
         <Route path="koleksi" element={<WatchlistPage />} />
         <Route path="riwayat" element={<HistoryPage />} />
         <Route path="*" element={<NotFoundPage />} />

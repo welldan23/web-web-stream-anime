@@ -1,13 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
-import { animePath, api, ApiError, episodeKey, episodePath, episodeRange } from '../lib/api'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
+import { api } from '../lib/api'
+import {
+  autoCandidates,
+  canSandbox,
+  flattenServers,
+  PLAYER_SANDBOX,
+  readBlockPopups,
+  rememberServer,
+  saveBlockPopups,
+  serverLabel,
+  sortForDisplay,
+  type ServerOption,
+} from '../lib/servers'
 import { recordWatch, useLibrary } from '../lib/library'
-import { preferredQuality, rememberQuality, type DirectSource } from '../lib/player'
+import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { cn } from '../lib/cn'
-import DirectPlayer from '../components/DirectPlayer'
 import Seo from '../components/Seo'
+import DirectPlayer from '../components/DirectPlayer'
+import { findDirectSources, preferredQuality, rememberQuality } from '../lib/kuramanime'
+import { ApiError } from '../lib/api'
 import { DEFAULT_DESCRIPTION, episodeMeta, pageTitle, titleFromSlug } from '../lib/site'
 import { SITE_URL } from '../lib/siteUrl'
 import { Card, Chip, ErrorState, Notice, Pill, Skeleton } from '../components/ui'
@@ -16,68 +30,122 @@ function GroupTitle({ children }: { children: React.ReactNode }) {
   return <p className="px-1 text-xs font-semibold uppercase text-ink-faint">{children}</p>
 }
 
-/** "720" -> "720p", "720p" -> "720p", "HD" -> "HD" */
-function qualityLabel(raw: string) {
-  const t = raw.trim()
-  return /^\d+$/.test(t) ? `${t}p` : t || 'Video'
-}
-
 export default function WatchPage() {
-  const { animeId = '', slug = '', episode: epParam = '' } = useParams()
-  const ref = { animeId, animeSlug: slug }
-  const thisKey = episodeKey(ref, epParam)
+  const { episodeId = '' } = useParams()
   const library = useLibrary()
+  // server yang dipilih manual, diikat ke episode-nya; 'default' = player bawaan otakudesu
+  const [picked, setPicked] = useState<{ episodeId: string; serverId: string } | null>(null)
   const activeEpisodeRef = useRef<HTMLAnchorElement>(null)
-  // kualitas yang dipilih manual, diikat ke episode-nya
-  const [picked, setPicked] = useState<{ key: string; quality: string } | null>(null)
-  // episode yang videonya gagal diputar
-  const [failed, setFailed] = useState<string | null>(null)
 
-  const episode = useQuery({
-    queryKey: ['episode', animeId, slug, epParam],
-    queryFn: () => api.episode(animeId, slug, epParam),
-  })
+  const episode = useQuery({ queryKey: ['episode', episodeId], queryFn: () => api.episode(episodeId) })
+  const animeId = episode.data?.animeId
   const anime = useQuery({
-    queryKey: ['anime', animeId, slug],
-    queryFn: () => api.anime(animeId, slug),
+    queryKey: ['anime', animeId],
+    queryFn: () => api.anime(animeId!),
+    enabled: Boolean(animeId),
   })
+
   const ep = episode.data
-  const epNumber = Number.parseFloat(epParam)
-  const animeTitle = anime.data?.title ?? ep?.title ?? titleFromSlug(slug)
-  const episodeTitle = `${animeTitle} Episode ${epParam}`
+  const epNumber = ep ? episodeNumber(ep.title) : null
+  const options = useMemo(() => flattenServers(ep?.server.qualityList ?? []), [ep])
+  const [blockPopups, setBlockPopups] = useState(readBlockPopups)
+  const candidates = useMemo(() => autoCandidates(options, blockPopups), [options, blockPopups])
+  const manual = picked?.episodeId === episodeId ? picked.serverId : null
+  // 'direct:720p' = user milih kualitas tertentu di server bebas iklan
+  const manualDirect = manual?.startsWith('direct:') ? manual.slice('direct:'.length) : null
 
-  const sources: DirectSource[] = useMemo(() => {
-    const list = (ep?.server.qualityList ?? [])
-      .flatMap((q) => (q.urlList ?? []).map((u) => ({ quality: qualityLabel(q.title), url: u.url })))
-      .filter((s) => /^https?:\/\//i.test(s.url))
-      .sort((a, b) => (Number.parseInt(b.quality, 10) || 0) - (Number.parseInt(a.quality, 10) || 0))
-    // satu link per kualitas
-    return list.filter((s, i) => list.findIndex((x) => x.quality === s.quality) === i)
-  }, [ep])
-  const quality = (picked?.key === thisKey ? picked.quality : null) ?? preferredQuality(sources)
-  const current = sources.find((s) => s.quality === quality) ?? sources[0]
-  const playFailed = failed === thisKey
+  // Server bebas iklan: cari episode yang sama di Kuramanime (link video langsung)
+  const animeTitle = anime.data?.title
+  const direct = useQuery({
+    queryKey: ['direct', ep?.animeId, epNumber],
+    queryFn: () => findDirectSources(animeTitle!, epNumber!),
+    enabled: Boolean(animeTitle) && epNumber !== null,
+    staleTime: 1000 * 60 * 30,
+    retry: false,
+  })
+  // episode yang video bebas iklannya gagal diputar → jangan dicoba lagi, pakai server biasa
+  const [directFailed, setDirectFailed] = useState<string | null>(null)
+  const directSources = directFailed === episodeId ? [] : (direct.data?.sources ?? [])
+  const useDirect = directSources.length > 0 && (!manual || manualDirect !== null)
+  const directQuality = manualDirect ?? preferredQuality(directSources)
+  // tunggu hasil pencarian bebas iklan dulu sebelum muter server biasa, biar player nggak gonta-ganti
+  const deciding = !manual && (anime.isLoading || direct.isLoading)
 
-  const pickQuality = (q: string) => {
-    rememberQuality(q)
-    setFailed(null)
-    setPicked({ key: thisKey, quality: q })
+  // Otomatis: coba server andalan satu per satu sampai ada yang ngasih link
+  const auto = useQuery({
+    queryKey: ['server-auto', episodeId, candidates.map((c) => c.serverId)],
+    queryFn: async () => {
+      for (const c of candidates) {
+        const url = await api.server(c.serverId).catch(() => null)
+        if (url) return { serverId: c.serverId, url }
+      }
+      return null
+    },
+    enabled: Boolean(ep) && !manual && candidates.length > 0 && !deciding && !useDirect,
+    staleTime: 1000 * 60 * 30,
+    retry: false,
+  })
+
+  // Manual: user milih server sendiri
+  const chosen = useQuery({
+    queryKey: ['server', manual],
+    queryFn: () => api.server(manual!),
+    enabled: Boolean(manual) && manual !== 'default' && !manualDirect,
+    staleTime: 1000 * 60 * 30,
+    retry: false,
+  })
+
+  const pickServer = (o: ServerOption | 'default') => {
+    if (o !== 'default') rememberServer(o)
+    setPicked({ episodeId, serverId: o === 'default' ? 'default' : o.serverId })
+  }
+
+  const usingAuto = !manual && candidates.length > 0
+  const iframeServer = manual ?? (usingAuto ? (auto.data?.serverId ?? (auto.data === null ? 'default' : null)) : 'default')
+  const activeServer = useDirect ? `direct:${directQuality}` : iframeServer
+  const iframeSrc = manual
+    ? manual === 'default'
+      ? ep?.defaultStreamingUrl
+      : chosen.data
+    : usingAuto
+      ? auto.data === null
+        ? ep?.defaultStreamingUrl
+        : auto.data?.url
+      : ep?.defaultStreamingUrl
+  const directUrl = directSources.find((s) => s.quality === directQuality)?.url ?? directSources[0]?.url
+  const src = useDirect ? directUrl : iframeSrc
+  const playerLoading =
+    episode.isLoading ||
+    (!useDirect &&
+      (deciding || (manual ? manual !== 'default' && chosen.isLoading : usingAuto && auto.isLoading)))
+  const serverError = !useDirect && manual && manual !== 'default' && chosen.isError
+  const autoFailed = !useDirect && !manual && usingAuto && auto.data === null
+  const pickDirect = (quality: string) => {
+    rememberQuality(quality)
+    setPicked({ episodeId, serverId: `direct:${quality}` })
+  }
+  const onDirectFail = () => {
+    setDirectFailed(episodeId)
+    if (manualDirect) setPicked(null)
   }
 
   // simpan ke riwayat setelah data episode (dan anime, kalau ada) kelar dimuat
-  const animeSettled = anime.isSuccess || anime.isError
+  const animeSettled = !animeId || anime.isSuccess || anime.isError
   useEffect(() => {
     if (!ep || !animeSettled) return
     recordWatch({
-      animeId: `${animeId}/${slug}`,
-      animeTitle,
+      animeId: ep.animeId,
+      animeTitle: anime.data?.title ?? ep.title.replace(/\s*episode.*$/i, ''),
       poster: anime.data?.poster ?? '',
-      episodeId: thisKey,
-      episodeTitle,
+      episodeId,
+      episodeTitle: ep.title,
     })
-  }, [ep, animeSettled, anime.data, animeId, slug, animeTitle, episodeTitle, thisKey])
+  }, [ep, animeSettled, anime.data, episodeId])
 
-  const episodes = useMemo(() => (anime.data ? episodeRange(anime.data) : []), [anime.data])
+  const episodes = useMemo(() => {
+    const list = anime.data?.episodeList?.length ? anime.data.episodeList : (ep?.info.episodeList ?? [])
+    return sortEpisodesAsc(list)
+  }, [anime.data, ep])
 
   // geser panel episode ke episode yang lagi diputar (cuma panelnya, halaman nggak ikut ke-scroll)
   useEffect(() => {
@@ -85,22 +153,15 @@ export default function WatchPage() {
     const panel = item?.parentElement
     if (!item || !panel) return
     panel.scrollTop = item.offsetTop - panel.clientHeight / 2 + item.clientHeight / 2
-  }, [episodes, epParam])
+  }, [episodes, episodeId])
 
   const seo = ep ? (
-    <Seo
-      {...episodeMeta(
-        SITE_URL,
-        thisKey,
-        { title: episodeTitle, animeId: `${animeId}/${slug}`, releaseTime: ep.lastUpdated },
-        { title: animeTitle, poster: anime.data?.poster },
-      )}
-    />
+    <Seo {...episodeMeta(SITE_URL, episodeId, ep, anime.data)} />
   ) : (
     <Seo
-      title={pageTitle(`Nonton ${titleFromSlug(slug)} Episode ${epParam} Sub Indo`)}
+      title={pageTitle(`Nonton ${titleFromSlug(episodeId)} Sub Indo`)}
       description={DEFAULT_DESCRIPTION}
-      path={`/nonton/${thisKey}`}
+      path={`/nonton/${episodeId}`}
       noindex={episode.error instanceof ApiError && episode.error.status === 404}
     />
   )
@@ -113,39 +174,53 @@ export default function WatchPage() {
       </>
     )
 
+  const reliable = sortForDisplay(options.filter((o) => o.reliable))
+  const others = options.filter((o) => !o.reliable)
+  const activeOption = options.find((o) => o.serverId === activeServer)
+  // sebagian server (Vidhide) nolak muter kalau di-sandbox, jadi blokir pop-up dilewati buat server itu
+  const sandboxed = blockPopups && canSandbox(activeOption)
+  const sandboxSkipped = !useDirect && blockPopups && !sandboxed && activeOption
   const downloads = ep?.download.qualityList.filter((q) => q.urlList && q.urlList.length > 0) ?? []
 
   return (
     <div className="space-y-4">
       {seo}
-      <Link
-        to={animePath(ref)}
-        className="inline-flex max-w-full items-center gap-2 py-1 text-[15px] font-semibold text-ink active:opacity-70"
-      >
-        <ArrowLeft className="size-6 shrink-0" />
-        <span className="truncate">{anime.data?.title ?? ep?.title ?? 'Detail anime'}</span>
-      </Link>
+      {ep ? (
+        <Link
+          to={`/anime/${ep.animeId}`}
+          className="inline-flex max-w-full items-center gap-2 py-1 text-[15px] font-semibold text-ink active:opacity-70"
+        >
+          <ArrowLeft className="size-6 shrink-0" />
+          <span className="truncate">{anime.data?.title ?? 'Detail anime'}</span>
+        </Link>
+      ) : (
+        <Skeleton className="h-8 w-48" />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
         <div className="min-w-0 space-y-4">
           <div className="relative aspect-video overflow-hidden rounded-[20px] bg-black">
-            {episode.isLoading ? (
+            {playerLoading ? (
               <div className="absolute inset-0 grid place-items-center">
                 <Loader2 className="size-8 animate-spin text-white/70" />
               </div>
-            ) : current && !playFailed ? (
-              <DirectPlayer
-                key={thisKey}
-                episodeId={thisKey}
-                sources={sources}
-                quality={current.quality}
-                onFail={() => setFailed(thisKey)}
+            ) : useDirect && directQuality ? (
+              <DirectPlayer key={episodeId} episodeId={episodeId} sources={directSources} quality={directQuality} onFail={onDirectFail} />
+            ) : src ? (
+              <iframe
+                // key ikut status blokir: atribut sandbox cuma kebaca waktu iframe dibuat ulang
+                key={`${src}|${sandboxed}`}
+                src={src}
+                title={ep?.title ?? 'Player'}
+                sandbox={sandboxed ? PLAYER_SANDBOX : undefined}
+                allowFullScreen
+                allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+                referrerPolicy="no-referrer"
+                className="absolute inset-0 h-full w-full"
               />
             ) : (
               <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-white/70">
-                {playFailed
-                  ? 'Video gagal diputar. Coba kualitas lain atau download di bawah.'
-                  : 'Video episode ini belum tersedia. Coba lagi nanti atau download di bawah.'}
+                Video nggak tersedia di server ini. Coba server lain di bawah.
               </div>
             )}
           </div>
@@ -154,52 +229,148 @@ export default function WatchPage() {
             {ep ? (
               <>
                 <p className="text-[13px] font-medium text-ink-muted">
-                  {ep.episodeTitle || `Episode ${epParam}`}
-                  {ep.lastUpdated ? ` · ${ep.lastUpdated}` : ''}
+                  {epNumber !== null ? `Episode ${epNumber}` : 'Sedang diputar'}
+                  {ep.releaseTime ? ` · ${ep.releaseTime}` : ''}
                 </p>
-                <h1 className="mt-0.5 text-lg font-bold leading-snug text-ink sm:text-xl">{episodeTitle}</h1>
+                <h1 className="mt-0.5 text-lg font-bold leading-snug text-ink sm:text-xl">{ep.title}</h1>
               </>
             ) : (
               <Skeleton className="h-12" />
             )}
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <EpisodeNav to={ep?.prevEpisode ? episodePath(ref, ep.prevEpisode.episodeId) : undefined} dir="prev" />
-              <EpisodeNav to={ep?.nextEpisode ? episodePath(ref, ep.nextEpisode.episodeId) : undefined} dir="next" />
+              <EpisodeNav to={ep?.prevEpisode?.episodeId} dir="prev" />
+              <EpisodeNav to={ep?.nextEpisode?.episodeId} dir="next" />
             </div>
           </Card>
 
-          {playFailed ? <Notice tone="danger">Video gagal diputar di kualitas ini. Coba kualitas lain.</Notice> : null}
+          {directFailed === episodeId ? (
+            <Notice>Server bebas iklan nggak bisa diputar buat episode ini, jadi pindah ke server biasa.</Notice>
+          ) : null}
+          {serverError ? <Notice tone="danger">Server ini lagi bermasalah. Coba pilih server lain.</Notice> : null}
+          {autoFailed ? (
+            <Notice>Server lancar lagi nggak bisa buat episode ini, jadi diputar pakai player bawaan.</Notice>
+          ) : null}
 
-          {sources.length > 0 ? (
-            <div className="space-y-2">
-              <GroupTitle>Kualitas</GroupTitle>
-              <Card className="px-4 py-3">
-                <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
-                  <ShieldCheck className="size-4 text-success-500" /> Bebas iklan
-                  <span className="font-normal text-ink-muted">· diputar langsung di Animeku</span>
+          <div className="space-y-2">
+            <GroupTitle>Server</GroupTitle>
+            <Card className="px-4">
+              {directSources.length > 0 ? (
+                <div className="border-b border-line py-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+                    <ShieldCheck className="size-4 text-success-500" /> Bebas iklan
+                    <span className="font-normal text-ink-muted">· Kuramanime</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {directSources.map((d) => (
+                      <Chip
+                        size="sm"
+                        key={d.quality}
+                        active={activeServer === `direct:${d.quality}`}
+                        onClick={() => pickDirect(d.quality)}
+                      >
+                        {d.quality}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              ) : direct.isLoading ? (
+                <p className="flex items-center gap-2 border-b border-line py-3 text-xs text-ink-muted">
+                  <Loader2 className="size-3.5 animate-spin" /> Lagi nyari server bebas iklan…
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {sources.map((s) => (
-                    <Chip size="sm" key={s.quality} active={current?.quality === s.quality && !playFailed} onClick={() => pickQuality(s.quality)}>
-                      {s.quality}
+              ) : null}
+              {reliable.length > 0 ? (
+                <div className="py-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+                    <span className="size-2 rounded-full bg-success-500" /> Lancar
+                    {activeOption ? (
+                      <span className="font-normal text-ink-muted">· lagi diputar: {serverLabel(activeOption)}</span>
+                    ) : null}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {reliable.map((o) => (
+                      <Chip size="sm" key={o.serverId} active={activeServer === o.serverId} onClick={() => pickServer(o)}>
+                        {serverLabel(o)}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <details className={cn('group py-3', reliable.length > 0 && 'border-t border-line')} open={reliable.length === 0}>
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-ink-muted">
+                  Server lain
+                  <span className="font-normal">· sering error</span>
+                  <ChevronDown className="ml-auto size-4 transition group-open:rotate-180" />
+                </summary>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Chip size="sm" active={activeServer === 'default'} onClick={() => pickServer('default')}>
+                    Player bawaan
+                  </Chip>
+                  {others.map((o) => (
+                    <Chip size="sm" key={o.serverId} active={activeServer === o.serverId} onClick={() => pickServer(o)}>
+                      {serverLabel(o)}
                     </Chip>
                   ))}
                 </div>
-              </Card>
-              {current ? (
-                <div className="flex justify-end px-1">
-                  <a
-                    href={current.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary-500 hover:underline"
-                  >
-                    Buka video di tab baru <ExternalLink className="size-3" />
-                  </a>
-                </div>
+              </details>
+            </Card>
+            <div className="flex items-start justify-between gap-3 px-1">
+              <p className="text-xs text-ink-muted">
+                Server lancar dipilih otomatis. Pilihan kamu diingat buat episode berikutnya.
+              </p>
+              {src ? (
+                // cadangan kalau player nggak mau jalan di dalam web: buka langsung di tab baru
+                <a
+                  href={src}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary-500 hover:underline"
+                >
+                  Buka di tab baru <ExternalLink className="size-3" />
+                </a>
               ) : null}
             </div>
-          ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <GroupTitle>Iklan</GroupTitle>
+            <Card className="px-4">
+              <label className="flex cursor-pointer items-center gap-3 py-3.5">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-500">
+                  <ShieldCheck className="size-[18px]" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-ink">Blokir pop-up iklan</span>
+                  <span className="block text-xs leading-relaxed text-ink-muted">
+                    Cegah tab iklan kebuka & halaman pindah sendiri pas video diklik. Kalau video nggak mau
+                    muter, matiin ini.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={blockPopups}
+                  onChange={(e) => {
+                    setBlockPopups(e.target.checked)
+                    saveBlockPopups(e.target.checked)
+                  }}
+                  className="peer sr-only"
+                />
+                <span
+                  aria-hidden
+                  className="relative h-7 w-12 shrink-0 rounded-full bg-tile transition peer-checked:bg-primary-500 peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500/50 after:absolute after:left-1 after:top-1 after:size-5 after:rounded-full after:bg-ink-faint after:transition peer-checked:after:translate-x-5 peer-checked:after:bg-on-primary"
+                />
+              </label>
+            </Card>
+            {sandboxSkipped ? (
+              <p className="px-1 text-xs text-warning-600">
+                {serverLabel(sandboxSkipped)} nolak muter kalau pop-up diblokir, jadi buat server ini blokirnya
+                dilewatin.
+              </p>
+            ) : null}
+            <p className="px-1 text-xs text-ink-muted">
+              Iklan yang tampil di dalam video berasal dari server videonya, jadi nggak bisa dihapus dari sini.
+            </p>
+          </div>
 
           {downloads.length > 0 ? (
             <div className="space-y-2">
@@ -207,7 +378,7 @@ export default function WatchPage() {
               <Card className="px-4">
                 {downloads.map((q, i) => (
                   <div
-                    key={`${q.title}-${i}`}
+                    key={q.title}
                     className={cn('flex flex-wrap items-center gap-2 py-3', i < downloads.length - 1 && 'border-b border-line')}
                   >
                     <div className="mr-auto min-w-28">
@@ -239,21 +410,22 @@ export default function WatchPage() {
             <div className="thin-scroll relative max-h-[420px] overflow-y-auto lg:max-h-[calc(100dvh-160px)]">
               {episodes.length === 0
                 ? Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="m-3 h-8" />)
-                : episodes.map((n, i) => {
-                    const active = n === epNumber
-                    const watched = library.watched.includes(episodeKey(ref, n))
+                : episodes.map((e, i) => {
+                    const active = e.episodeId === episodeId
+                    const watched = library.watched.includes(e.episodeId)
                     return (
                       <Link
-                        key={n}
+                        key={e.episodeId}
                         ref={active ? activeEpisodeRef : undefined}
-                        to={episodePath(ref, n)}
+                        to={`/nonton/${e.episodeId}`}
+                        title={e.title}
                         className={cn(
                           'flex items-center justify-between gap-2 px-4 py-3 text-[15px] active:opacity-70',
                           i < episodes.length - 1 && 'border-b border-line',
                           active ? 'bg-primary-50 font-semibold text-primary-600' : 'text-ink hover:bg-subtle',
                         )}
                       >
-                        <span className="truncate">Episode {n}</span>
+                        <span className="truncate">{shortEpisodeLabel(e.title)}</span>
                         {active ? (
                           <Pill>Diputar</Pill>
                         ) : watched ? (
@@ -288,7 +460,10 @@ function EpisodeNav({ to, dir }: { to?: string; dir: 'prev' | 'next' }) {
     )
   }
   return (
-    <Link to={to} className={cn(base, 'active:opacity-80', prev ? 'bg-tile text-ink' : 'bg-primary-500 text-on-primary')}>
+    <Link
+      to={`/nonton/${to}`}
+      className={cn(base, 'active:opacity-80', prev ? 'bg-tile text-ink' : 'bg-primary-500 text-on-primary')}
+    >
       {content}
     </Link>
   )

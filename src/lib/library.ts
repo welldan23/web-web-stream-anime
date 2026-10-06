@@ -24,9 +24,7 @@ interface LibraryState {
   watched: string[]
 }
 
-// v2 = sumber Kuramanime. ID anime/episode Otakudesu yang lama nggak bisa dipetakan,
-// jadi koleksi & riwayat lama nggak dibawa.
-const KEY = 'animeku:library:kuramanime'
+const KEY = 'animeku:library'
 const MAX_HISTORY = 50
 const MAX_WATCHED = 2000
 

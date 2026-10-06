@@ -1,10 +1,11 @@
-// Halaman daftar: Ongoing, Tamat, Film, Semua Anime, Cari, Genre, Jadwal
-import { useState, type ReactNode } from 'react'
+// Halaman daftar: Sedang Tayang, Sudah Tamat, Cari, Genre, Jadwal, A–Z
+import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { ChevronRight, ImageUp, Search, SearchX } from 'lucide-react'
-import { animePath, api, episodePath, type AnimeCard as AnimeCardData, type Pagination, type SortKey } from '../lib/api'
-import { normalizeDay, todayName, WEEK } from '../lib/days'
+import { api } from '../lib/api'
+import { DAYS, normalizeDay, todayName } from '../lib/days'
+import { cn } from '../lib/cn'
 import SearchBox from '../components/SearchBox'
 import Seo from '../components/Seo'
 import { breadcrumb, pageTitle } from '../lib/site'
@@ -21,6 +22,7 @@ import {
   PageTitle,
   Pager,
   Pill,
+  Score,
   Skeleton,
 } from '../components/ui'
 
@@ -35,214 +37,104 @@ function usePage() {
   return [page, setPage] as const
 }
 
-const withPage = (path: string, page: number) => (page > 1 ? `${path}?page=${page}` : path)
-const pageSuffix = (page: number) => (page > 1 ? ` – Halaman ${page}` : '')
-
-function AnimeGrid({ list }: { list: AnimeCardData[] }) {
-  return (
-    <CardGrid>
-      {list.map((a) => (
-        <AnimeCard
-          key={`${a.animeId}-${a.animeSlug}`}
-          to={animePath(a)}
-          title={a.title}
-          poster={a.poster}
-          label={a.highlight || undefined}
-          meta={[a.type, a.quality].filter(Boolean).join(' · ')}
-        />
-      ))}
-    </CardGrid>
-  )
-}
-
-/** Kerangka halaman daftar: judul, grid di kartu, dan pindah halaman. */
-function ListLayout({
-  seo,
-  title,
-  subtitle,
-  top,
-  query,
-  page,
-  setPage,
-  render,
-}: {
-  seo: ReactNode
-  title: string
-  subtitle?: string
-  top?: ReactNode
-  query: { isLoading: boolean; error: unknown; refetch: () => unknown; data?: { pagination: Pagination | null } }
-  page: number
-  setPage: (p: number) => void
-  render: () => ReactNode
-}) {
-  return (
-    <div className="space-y-4">
-      {seo}
-      <PageTitle title={title} subtitle={subtitle} />
-      {top}
-      {query.error ? (
-        <ErrorState error={query.error} onRetry={() => query.refetch()} />
-      ) : (
-        <Card className="p-4 sm:p-5">{query.isLoading ? <CardGridSkeleton count={18} /> : render()}</Card>
-      )}
-      <Pager pagination={query.data?.pagination} page={page} onChange={setPage} />
-    </div>
-  )
+function GridCard({ children }: { children: React.ReactNode }) {
+  return <Card className="p-4 sm:p-5">{children}</Card>
 }
 
 export function OngoingPage() {
   const [page, setPage] = usePage()
-  const q = useQuery({
-    queryKey: ['animes', 'ongoing', page],
-    queryFn: () => api.animes({ status: 'ongoing', page }),
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['ongoing', page],
+    queryFn: () => api.ongoing(page),
     placeholderData: keepPreviousData,
   })
-  return (
-    <ListLayout
-      seo={
-        <Seo
-          title={pageTitle(`Anime Ongoing Sub Indo Terbaru${pageSuffix(page)}`)}
-          description="Episode terbaru anime ongoing subtitle Indonesia, update tiap hari. Nonton gratis tanpa iklan."
-          path={withPage('/ongoing', page)}
-        />
-      }
-      title="Sedang Tayang"
-      subtitle="Episode terbaru anime yang masih rilis tiap minggu"
-      query={q}
-      page={page}
-      setPage={setPage}
-      render={() => (
-        <CardGrid>
-          {(q.data?.data.episodeList ?? []).map((e) => (
-            <AnimeCard
-              key={`${e.animeId}-${e.episodeId}`}
-              to={episodePath(e, e.episodeId)}
-              title={e.title}
-              poster={e.poster}
-              label={`Ep ${e.episodes}`}
-              meta={e.totalEpisodes && e.totalEpisodes !== '?' ? `dari ${e.totalEpisodes} episode` : e.type}
-            />
-          ))}
-        </CardGrid>
-      )}
-    />
-  )
-}
 
-function StatusPage({
-  status,
-  path,
-  title,
-  subtitle,
-  seoTitle,
-  seoDescription,
-}: {
-  status: 'completed' | 'movie'
-  path: string
-  title: string
-  subtitle: string
-  seoTitle: string
-  seoDescription: string
-}) {
-  const [page, setPage] = usePage()
-  const q = useQuery({
-    queryKey: ['animes', status, page],
-    queryFn: () => api.animes({ status, page }),
-    placeholderData: keepPreviousData,
-  })
   return (
-    <ListLayout
-      seo={<Seo title={pageTitle(`${seoTitle}${pageSuffix(page)}`)} description={seoDescription} path={withPage(path, page)} />}
-      title={title}
-      subtitle={subtitle}
-      query={q}
-      page={page}
-      setPage={setPage}
-      render={() => <AnimeGrid list={q.data?.data.animeList ?? []} />}
-    />
+    <div className="space-y-4">
+      <Seo
+        title={pageTitle(`Anime Ongoing Sub Indo Terbaru${page > 1 ? ` – Halaman ${page}` : ''}`)}
+        description="Daftar anime ongoing subtitle Indonesia yang masih rilis episode baru tiap minggu. Update episode terbaru setiap hari."
+        path={page > 1 ? `/ongoing?page=${page}` : '/ongoing'}
+      />
+      <PageTitle title="Sedang Tayang" subtitle="Masih rilis episode baru tiap minggu" />
+      {error ? (
+        <ErrorState error={error} onRetry={() => refetch()} />
+      ) : (
+        <GridCard>
+          {isLoading ? (
+            <CardGridSkeleton count={18} />
+          ) : (
+            <CardGrid>
+              {data?.data.animeList.map((a) => (
+                <AnimeCard
+                  key={a.animeId}
+                  animeId={a.animeId}
+                  title={a.title}
+                  poster={a.poster}
+                  label={`Ep ${a.episodes}`}
+                  meta={`${a.releaseDay} · ${a.latestReleaseDate}`}
+                />
+              ))}
+            </CardGrid>
+          )}
+        </GridCard>
+      )}
+      <Pager pagination={data?.pagination} page={page} onChange={setPage} />
+    </div>
   )
 }
 
 export function CompletedPage() {
-  return (
-    <StatusPage
-      status="completed"
-      path="/tamat"
-      title="Sudah Tamat"
-      subtitle="Episodenya udah lengkap, pas buat maraton"
-      seoTitle="Anime Tamat Sub Indo Lengkap"
-      seoDescription="Daftar anime tamat subtitle Indonesia dengan episode lengkap, pas buat maraton. Nonton gratis tanpa iklan."
-    />
-  )
-}
-
-export function MoviePage() {
-  return (
-    <StatusPage
-      status="movie"
-      path="/film"
-      title="Film"
-      subtitle="Film anime layar lebar"
-      seoTitle="Film Anime Sub Indo"
-      seoDescription="Kumpulan film anime layar lebar subtitle Indonesia. Nonton gratis tanpa iklan."
-    />
-  )
-}
-
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'popular', label: 'Populer' },
-  { key: 'most_viewed', label: 'Paling ditonton' },
-  { key: 'latest', label: 'Terbaru' },
-  { key: 'a-z', label: 'A–Z' },
-]
-
-export function AllAnimePage() {
-  const [params, setParams] = useSearchParams()
   const [page, setPage] = usePage()
-  const sort = (SORTS.find((s) => s.key === params.get('urut'))?.key ?? 'popular') as SortKey
-  const q = useQuery({
-    queryKey: ['animes', 'all', sort, page],
-    queryFn: () => api.animes({ sort, page }),
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['completed', page],
+    queryFn: () => api.completed(page),
     placeholderData: keepPreviousData,
   })
+
   return (
-    <ListLayout
-      seo={
-        <Seo
-          title={pageTitle(`Daftar Semua Anime Sub Indo${pageSuffix(page)}`)}
-          description="Daftar lengkap anime subtitle Indonesia, urut populer, paling banyak ditonton, terbaru, atau A–Z."
-          path={withPage('/daftar', page)}
-        />
-      }
-      title="Semua Anime"
-      top={
-        <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-          {SORTS.map((s) => (
-            <Chip key={s.key} active={sort === s.key} onClick={() => setParams({ urut: s.key })}>
-              {s.label}
-            </Chip>
-          ))}
-        </div>
-      }
-      query={q}
-      page={page}
-      setPage={setPage}
-      render={() => <AnimeGrid list={q.data?.data.animeList ?? []} />}
-    />
+    <div className="space-y-4">
+      <Seo
+        title={pageTitle(`Anime Tamat Sub Indo Lengkap${page > 1 ? ` – Halaman ${page}` : ''}`)}
+        description="Daftar anime tamat subtitle Indonesia dengan episode lengkap, pas buat maraton. Lengkap dengan skor dan jumlah episode."
+        path={page > 1 ? `/tamat?page=${page}` : '/tamat'}
+      />
+      <PageTitle title="Sudah Tamat" subtitle="Episodenya udah lengkap, pas buat maraton" />
+      {error ? (
+        <ErrorState error={error} onRetry={() => refetch()} />
+      ) : (
+        <GridCard>
+          {isLoading ? (
+            <CardGridSkeleton count={18} />
+          ) : (
+            <CardGrid>
+              {data?.data.animeList.map((a) => (
+                <AnimeCard
+                  key={a.animeId}
+                  animeId={a.animeId}
+                  title={a.title}
+                  poster={a.poster}
+                  label={`${a.episodes} eps`}
+                  meta={<Score score={a.score} />}
+                />
+              ))}
+            </CardGrid>
+          )}
+        </GridCard>
+      )}
+      <Pager pagination={data?.pagination} page={page} onChange={setPage} />
+    </div>
   )
 }
 
 export function SearchPage() {
   const [params] = useSearchParams()
   const q = (params.get('q') ?? '').trim()
-  const [page, setPage] = usePage()
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['search', q, page],
-    queryFn: () => api.animes({ search: q, page }),
+    queryKey: ['search', q],
+    queryFn: () => api.search(q),
     enabled: q.length > 0,
-    placeholderData: keepPreviousData,
   })
-  const list = data?.data.animeList ?? []
 
   return (
     <div className="space-y-4">
@@ -274,26 +166,28 @@ export function SearchPage() {
       ) : error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : isLoading ? (
-        <Card className="p-4 sm:p-5">
+        <GridCard>
           <CardGridSkeleton />
+        </GridCard>
+      ) : data && data.length > 0 ? (
+        <Card className="px-4">
+          {data.map((a, i) => (
+            <ListRow
+              key={a.animeId}
+              to={`/anime/${a.animeId}`}
+              poster={a.poster}
+              title={a.title}
+              subtitle={a.genreList.map((g) => g.title).join(', ')}
+              trailing={
+                <div className="flex flex-col items-end gap-1">
+                  {a.status ? <Pill tone={/complete|tamat/i.test(a.status) ? 'success' : 'primary'}>{a.status}</Pill> : null}
+                  <Score score={a.score} />
+                </div>
+              }
+              isLast={i === data.length - 1}
+            />
+          ))}
         </Card>
-      ) : list.length > 0 ? (
-        <>
-          <Card className="px-4">
-            {list.map((a, i) => (
-              <ListRow
-                key={`${a.animeId}-${a.animeSlug}`}
-                to={animePath(a)}
-                poster={a.poster}
-                title={a.title}
-                subtitle={[a.type, a.highlight].filter(Boolean).join(' · ')}
-                trailing={a.quality ? <Pill tone="neutral">{a.quality}</Pill> : null}
-                isLast={i === list.length - 1}
-              />
-            ))}
-          </Card>
-          <Pager pagination={data?.pagination} page={page} onChange={setPage} />
-        </>
       ) : (
         <EmptyState icon={<SearchX className="size-5" />} title="Nggak ketemu">
           Coba kata kunci lain, atau pakai judul Jepang-nya.
@@ -304,11 +198,7 @@ export function SearchPage() {
 }
 
 export function GenresPage() {
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['properties', 'genre'],
-    queryFn: () => api.properties('genre'),
-    staleTime: 1000 * 60 * 60,
-  })
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ['genres'], queryFn: api.genres })
 
   return (
     <div className="space-y-4">
@@ -317,14 +207,7 @@ export function GenresPage() {
         description="Cari anime subtitle Indonesia berdasarkan genre: action, adventure, comedy, romance, isekai, slice of life, dan lainnya."
         path="/genre"
       />
-      <PageTitle
-        title="Genre"
-        action={
-          <Link to="/daftar" className="text-sm font-semibold text-primary-500 hover:underline">
-            Semua anime ›
-          </Link>
-        }
-      />
+      <PageTitle title="Genre" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : (
@@ -333,8 +216,8 @@ export function GenresPage() {
             ? Array.from({ length: 16 }, (_, i) => <Skeleton key={i} className="h-[52px] rounded-2xl" />)
             : data?.map((g) => (
                 <Link
-                  key={g.propertyId}
-                  to={`/genre/${g.propertyId}`}
+                  key={g.genreId}
+                  to={`/genre/${g.genreId}`}
                   className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5 text-[15px] font-semibold text-ink shadow-card active:opacity-70"
                 >
                   {g.title}
@@ -350,93 +233,176 @@ export function GenresPage() {
 export function GenrePage() {
   const { genreId = '' } = useParams()
   const [page, setPage] = usePage()
-  const genres = useQuery({
-    queryKey: ['properties', 'genre'],
-    queryFn: () => api.properties('genre'),
-    staleTime: 1000 * 60 * 60,
-  })
-  const q = useQuery({
+  const genres = useQuery({ queryKey: ['genres'], queryFn: api.genres })
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['genre', genreId, page],
-    queryFn: () => api.byProperty('genre', genreId, { page, sort: 'popular' }),
+    queryFn: () => api.byGenre(genreId, page),
     placeholderData: keepPreviousData,
   })
-  const genreTitle = genres.data?.find((g) => g.propertyId === genreId)?.title ?? genreId
+  const genreTitle = genres.data?.find((g) => g.genreId === genreId)?.title ?? genreId
 
   return (
-    <ListLayout
-      seo={
-        <Seo
-          title={pageTitle(`Anime ${genreTitle} Sub Indo${pageSuffix(page)}`)}
-          description={`Kumpulan anime genre ${genreTitle} subtitle Indonesia, urut paling populer. Nonton gratis tanpa iklan.`}
-          path={withPage(`/genre/${genreId}`, page)}
-          jsonLd={[
-            breadcrumb(SITE_URL, [
-              { name: 'Beranda', path: '/' },
-              { name: 'Genre', path: '/genre' },
-              { name: genreTitle, path: `/genre/${genreId}` },
-            ]),
-          ]}
-        />
-      }
-      title={genreTitle}
-      subtitle="Genre · paling populer"
-      query={q}
-      page={page}
-      setPage={setPage}
-      render={() => <AnimeGrid list={q.data?.data.animeList ?? []} />}
-    />
+    <div className="space-y-4">
+      <Seo
+        title={pageTitle(`Anime ${genreTitle} Sub Indo${page > 1 ? ` – Halaman ${page}` : ''}`)}
+        description={`Kumpulan anime genre ${genreTitle} subtitle Indonesia. Nonton gratis, lengkap dengan skor, studio, dan jumlah episode.`}
+        path={page > 1 ? `/genre/${genreId}?page=${page}` : `/genre/${genreId}`}
+        jsonLd={[
+          breadcrumb(SITE_URL, [
+            { name: 'Beranda', path: '/' },
+            { name: 'Genre', path: '/genre' },
+            { name: genreTitle, path: `/genre/${genreId}` },
+          ]),
+        ]}
+      />
+      <PageTitle title={genreTitle} subtitle="Genre" />
+      {error ? (
+        <ErrorState error={error} onRetry={() => refetch()} />
+      ) : (
+        <GridCard>
+          {isLoading ? (
+            <CardGridSkeleton count={18} />
+          ) : (
+            <CardGrid>
+              {data?.data.animeList.map((a) => (
+                <AnimeCard
+                  key={a.animeId}
+                  animeId={a.animeId}
+                  title={a.title}
+                  poster={a.poster}
+                  label={a.episodes ? `${a.episodes} eps` : undefined}
+                  meta={<Score score={a.score} />}
+                />
+              ))}
+            </CardGrid>
+          )}
+        </GridCard>
+      )}
+      <Pager pagination={data?.pagination} page={page} onChange={setPage} />
+    </div>
   )
 }
 
 export function SchedulePage() {
-  const todayDay = WEEK.find((d) => normalizeDay(d.name) === normalizeDay(todayName()))!
-  const [selected, setSelected] = useState(todayDay.param)
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['schedule', selected, 1],
-    queryFn: () => api.schedule(selected),
-    staleTime: 1000 * 60 * 30,
-  })
-  const list = data?.data.animeList ?? []
-  const active = WEEK.find((d) => d.param === selected)!
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ['schedule'], queryFn: api.schedule })
+  const [selected, setSelected] = useState<string | null>(null)
+
+  // urutkan Senin -> Minggu, default = hari ini
+  const days = useMemo(() => {
+    const order = [...DAYS.slice(1), DAYS[0]].map(normalizeDay)
+    return [...(data ?? [])].sort((a, b) => {
+      const ia = order.indexOf(normalizeDay(a.title))
+      const ib = order.indexOf(normalizeDay(b.title))
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+    })
+  }, [data])
+  const isToday = (day: string) => normalizeDay(day) === normalizeDay(todayName())
+  const active = selected ?? days.find((d) => isToday(d.title))?.title ?? days[0]?.title
+  const current = days.find((d) => d.title === active)
 
   return (
     <div className="space-y-4">
       <Seo
         title={pageTitle('Jadwal Rilis Anime Sub Indo Minggu Ini')}
-        description="Jadwal tayang anime ongoing subtitle Indonesia dari Senin sampai Minggu, lengkap dengan jam rilisnya."
+        description="Jadwal tayang anime ongoing subtitle Indonesia dari Senin sampai Minggu. Cek anime apa aja yang rilis hari ini."
         path="/jadwal"
       />
       <PageTitle title="Jadwal Rilis" subtitle="Anime ongoing yang tayang tiap minggu" />
-      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-        {WEEK.map((d) => (
-          <Chip key={d.param} active={d.param === selected} onClick={() => setSelected(d.param)}>
-            {d.name}
-            {d.param === todayDay.param ? <span className="size-1.5 rounded-full bg-success-500" aria-label="hari ini" /> : null}
-          </Chip>
-        ))}
-      </div>
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : isLoading ? (
         <Skeleton className="h-96 rounded-[20px]" />
       ) : (
-        <Card className="px-4">
-          <div className="flex items-center justify-between border-b border-line py-3">
-            <p className="font-bold text-ink">{active.name}</p>
-            <span className="text-sm text-ink-muted">{list.length} anime</span>
+        <>
+          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+            {days.map((d) => (
+              <Chip key={d.title} active={d.title === active} onClick={() => setSelected(d.title)}>
+                {d.title}
+                {isToday(d.title) ? <span className="size-1.5 rounded-full bg-success-500" aria-label="hari ini" /> : null}
+              </Chip>
+            ))}
           </div>
-          {list.map((a, i) => (
-            <ListRow
-              key={`${a.animeId}-${i}`}
-              to={animePath(a)}
-              poster={a.poster}
-              title={a.title}
-              subtitle={[a.releaseTime && `Tayang ${a.releaseTime}`, a.type].filter(Boolean).join(' · ')}
-              isLast={i === list.length - 1}
-            />
+          <Card className="px-4">
+            <div className="flex items-center justify-between border-b border-line py-3">
+              <p className="font-bold text-ink">{active}</p>
+              <span className="text-sm text-ink-muted">{current?.animeList.length ?? 0} anime</span>
+            </div>
+            {current?.animeList.map((a, i, arr) => (
+              <ListRow key={a.animeId} to={`/anime/${a.animeId}`} title={a.title} isLast={i === arr.length - 1} />
+            ))}
+            {current?.animeList.length === 0 ? <p className="py-6 text-center text-sm text-ink-muted">Kosong.</p> : null}
+          </Card>
+        </>
+      )}
+    </div>
+  )
+}
+
+export function AzPage() {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['all-anime'],
+    queryFn: api.allAnime,
+    staleTime: 1000 * 60 * 30,
+  })
+  const [letter, setLetter] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
+
+  const groups = useMemo(() => {
+    const f = filter.trim().toLowerCase()
+    return (data ?? [])
+      .filter((g) => !letter || g.startWith === letter)
+      .map((g) => ({ ...g, animeList: f ? g.animeList.filter((a) => a.title.toLowerCase().includes(f)) : g.animeList }))
+      .filter((g) => g.animeList.length > 0)
+  }, [data, letter, filter])
+
+  const letterBtn = (active: boolean) =>
+    cn(
+      'h-9 min-w-9 rounded-full px-2.5 text-sm font-semibold active:opacity-70',
+      active ? 'bg-primary-500 text-on-primary' : 'bg-surface text-ink-soft shadow-card',
+    )
+
+  return (
+    <div className="space-y-4">
+      <Seo
+        title={pageTitle('Daftar Anime Sub Indo A–Z')}
+        description="Daftar lengkap semua anime subtitle Indonesia, urut abjad dari A sampai Z."
+        path="/daftar"
+      />
+      <PageTitle title="Daftar A–Z" subtitle="Semua anime, urut abjad" />
+      {error ? (
+        <ErrorState error={error} onRetry={() => refetch()} />
+      ) : isLoading ? (
+        <Skeleton className="h-96 rounded-[20px]" />
+      ) : (
+        <>
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Saring judul"
+            className="h-11 w-full rounded-full border border-line bg-surface px-5 text-[15px] shadow-card outline-none placeholder:text-ink-faint focus:border-primary-500"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setLetter(null)} className={letterBtn(!letter)}>
+              Semua
+            </button>
+            {data?.map((g) => (
+              <button key={g.startWith} onClick={() => setLetter(g.startWith)} className={letterBtn(letter === g.startWith)}>
+                {g.startWith}
+              </button>
+            ))}
+          </div>
+          {groups.map((g) => (
+            <div key={g.startWith} className="space-y-2">
+              <p className="px-1 text-xs font-semibold uppercase text-ink-faint">{g.startWith}</p>
+              <Card className="px-4">
+                {g.animeList.map((a, i) => (
+                  <ListRow key={a.animeId} to={`/anime/${a.animeId}`} title={a.title} isLast={i === g.animeList.length - 1} />
+                ))}
+              </Card>
+            </div>
           ))}
-          {list.length === 0 ? <p className="py-6 text-center text-sm text-ink-muted">Kosong.</p> : null}
-        </Card>
+          {groups.length === 0 ? <EmptyState icon={<SearchX className="size-5" />} title="Nggak ada yang cocok" /> : null}
+        </>
       )}
     </div>
   )

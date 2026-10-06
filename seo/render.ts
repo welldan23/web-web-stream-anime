@@ -1,8 +1,7 @@
-// Logika "suntik meta tag ke HTML" buat halaman /anime/:id/:slug dan /nonton/:id/:slug/:episode.
+// Logika "suntik meta tag ke HTML" buat halaman /anime/:id dan /nonton/:id.
 // Dipakai oleh fungsi Vercel (api/meta.ts) DAN oleh `npm run dev` / `npm run preview`
 // (seo/vite-plugin-seo.ts), jadi hasil di localhost sama persis kayak di produksi.
 import {
-  animeLikeFromKuramanime,
   animeMeta,
   DEFAULT_DESCRIPTION,
   episodeMeta,
@@ -17,7 +16,7 @@ const SAFE_ID = /^[\w.~-]{1,200}$/
 class NotFound extends Error {}
 
 async function apiGet<T>(api: string, path: string): Promise<T> {
-  const res = await fetch(`${api}/kuramanime${path}`, { signal: AbortSignal.timeout(4000) })
+  const res = await fetch(`${api}/otakudesu${path}`, { signal: AbortSignal.timeout(4000) })
   if (res.status === 404) throw new NotFound()
   if (!res.ok) throw new Error(`API ${res.status}`)
   const body = (await res.json()) as { data?: { details?: T } | null }
@@ -25,52 +24,28 @@ async function apiGet<T>(api: string, path: string): Promise<T> {
   return body.data.details
 }
 
-type KuraAnime = Parameters<typeof animeLikeFromKuramanime>[0]
+type AnimeDetails = Parameters<typeof animeMeta>[2]
+type EpisodeDetails = Parameters<typeof episodeMeta>[2]
 
-interface Target {
-  kind: 'anime' | 'episode'
-  animeId: string
-  slug: string
-  ep?: string
-}
-
-async function resolveMeta(api: string, site: string, t: Target): Promise<PageMeta> {
-  const animeKey = `${t.animeId}/${t.slug}`
-  const animePath = `/anime/${encodeURIComponent(t.animeId)}/${encodeURIComponent(t.slug)}`
-  if (t.kind === 'anime') {
-    return animeMeta(site, animeKey, animeLikeFromKuramanime(await apiGet<KuraAnime>(api, animePath)))
+async function resolveMeta(api: string, site: string, kind: string, id: string): Promise<PageMeta | null> {
+  if (kind === 'anime') {
+    return animeMeta(site, id, await apiGet<AnimeDetails>(api, `/anime/${encodeURIComponent(id)}`))
   }
-  const ep = await apiGet<{ title: string; lastUpdated?: string }>(
-    api,
-    `/episode/${encodeURIComponent(t.animeId)}/${encodeURIComponent(t.slug)}/${encodeURIComponent(t.ep!)}`,
-  )
-  const anime = await apiGet<KuraAnime>(api, animePath).catch(() => undefined)
-  const title = anime?.title ?? ep.title
-  return episodeMeta(
-    site,
-    `${animeKey}/${t.ep}`,
-    { title: `${title} Episode ${t.ep}`, animeId: animeKey, releaseTime: ep.lastUpdated },
-    { title, poster: anime?.poster },
-  )
+  if (kind === 'episode') {
+    const ep = await apiGet<EpisodeDetails>(api, `/episode/${encodeURIComponent(id)}`)
+    const anime = await apiGet<AnimeDetails>(api, `/anime/${encodeURIComponent(ep.animeId)}`).catch(() => undefined)
+    return episodeMeta(site, id, ep, anime)
+  }
+  return null
 }
 
-/**
- * Ambil jenis halaman dari query (?kind=&id=&slug=&ep=, dipakai rewrite Vercel)
- * atau langsung dari path: /anime/:id/:slug atau /nonton/:id/:slug/:episode.
- */
-export function parseTarget(url: URL): Target | null {
+/** Ambil jenis halaman & id dari query (?kind=&id=) atau langsung dari path, mis. /anime/one-piece. */
+export function parseTarget(url: URL) {
   const kind = url.searchParams.get('kind')
-  const animeId = url.searchParams.get('id')
-  const slug = url.searchParams.get('slug')
-  if ((kind === 'anime' || kind === 'episode') && animeId && slug) {
-    const ep = url.searchParams.get('ep') ?? undefined
-    if (kind === 'episode' && !ep) return null
-    return { kind, animeId, slug, ep }
-  }
-  const m = url.pathname.match(/^\/(?:anime\/([^/]+)\/([^/]+)|nonton\/([^/]+)\/([^/]+)\/([^/]+))\/?$/)
-  if (!m) return null
-  const dec = decodeURIComponent
-  return m[1] ? { kind: 'anime', animeId: dec(m[1]), slug: dec(m[2]) } : { kind: 'episode', animeId: dec(m[3]), slug: dec(m[4]), ep: dec(m[5]) }
+  const id = url.searchParams.get('id')
+  if (kind && id) return { kind, id }
+  const m = url.pathname.match(/^\/(anime|nonton)\/([^/]+)\/?$/)
+  return m ? { kind: m[1] === 'anime' ? 'anime' : 'episode', id: decodeURIComponent(m[2]) } : null
 }
 
 /**
@@ -83,17 +58,15 @@ export async function renderPage(
 ): Promise<{ html: string; status: number }> {
   const target = parseTarget(url)
   const apiBase = api && /^https?:\/\//.test(api) ? api.replace(/\/+$/, '') : ''
-  const safe = target && [target.animeId, target.slug, target.ep ?? 'x'].every((x) => SAFE_ID.test(x))
-  if (!apiBase || !target || !safe) return { html, status: 200 }
+  if (!apiBase || !target || !SAFE_ID.test(target.id)) return { html, status: 200 }
 
   try {
-    const meta = await resolveMeta(apiBase, site, target)
-    return { html: injectMeta(html, metaToHtml(site, meta)), status: 200 }
+    const meta = await resolveMeta(apiBase, site, target.kind, target.id)
+    return { html: meta ? injectMeta(html, metaToHtml(site, meta)) : html, status: 200 }
   } catch (error) {
     if (!(error instanceof NotFound)) return { html, status: 200 }
     // status 404 beneran biar Google nggak ngindeks halaman kosong
-    const base = `${target.animeId}/${target.slug}`
-    const path = target.kind === 'anime' ? `/anime/${base}` : `/nonton/${base}/${target.ep}`
+    const path = target.kind === 'anime' ? `/anime/${target.id}` : `/nonton/${target.id}`
     const notFound = metaToHtml(site, {
       title: pageTitle('Halaman Tidak Ditemukan'),
       description: DEFAULT_DESCRIPTION,

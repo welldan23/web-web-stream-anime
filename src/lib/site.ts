@@ -214,33 +214,3 @@ export function titleFromSlug(slug: string) {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
 }
-
-/**
- * Detail anime Kuramanime (dari wajik) → bentuk yang dipakai animeMeta().
- * Tipe ditulis manual (bukan import dari api.ts) biar file ini tetap bisa dipakai di server.
- */
-export function animeLikeFromKuramanime(d: {
-  title: string
-  alternativeTitle?: string
-  poster?: string
-  episodes?: string
-  aired?: string
-  synopsis?: { paragraphList: string[] }
-  status?: { title: string }
-  type?: { title: string }
-  studioList?: { title: string }[]
-  genreList?: { title: string }[]
-}) {
-  return {
-    title: d.title,
-    japanese: d.alternativeTitle,
-    poster: d.poster,
-    status: d.status?.title,
-    type: d.type?.title,
-    episodes: d.episodes,
-    studios: (d.studioList ?? []).map((s) => s.title).join(', '),
-    aired: d.aired,
-    synopsis: d.synopsis,
-    genreList: d.genreList,
-  }
-}
