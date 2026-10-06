@@ -19,6 +19,18 @@ import {
   Skeleton,
 } from '../components/ui'
 import { cn } from '../lib/cn'
+import Seo from '../components/Seo'
+import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, websiteJsonLd } from '../lib/site'
+import { SITE_URL } from '../lib/siteUrl'
+
+const homeSeo = (
+  <Seo
+    title={DEFAULT_TITLE}
+    description={DEFAULT_DESCRIPTION}
+    path="/"
+    jsonLd={[websiteJsonLd(SITE_URL)]}
+  />
+)
 
 /** Kartu abu muda paling atas: lanjut nonton, atau ringkasan rilis hari ini. */
 function TopCard({ today }: { today: OngoingAnime[] }) {
@@ -89,7 +101,13 @@ function Shortcuts() {
 export default function HomePage() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['home'], queryFn: api.home })
 
-  if (error) return <ErrorState error={error} onRetry={() => refetch()} />
+  if (error)
+    return (
+      <>
+        {homeSeo}
+        <ErrorState error={error} onRetry={() => refetch()} />
+      </>
+    )
 
   const ongoing = data?.ongoing.animeList ?? []
   const completed = data?.completed.animeList ?? []
@@ -97,6 +115,8 @@ export default function HomePage() {
 
   return (
     <div className="space-y-4">
+      {homeSeo}
+      <h1 className="sr-only">Animeku – Nonton Anime Sub Indo Gratis</h1>
       {isLoading ? <Skeleton className="h-28 rounded-[20px]" /> : <TopCard today={today} />}
 
       <Shortcuts />

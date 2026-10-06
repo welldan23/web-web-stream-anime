@@ -7,6 +7,9 @@ import { api } from '../lib/api'
 import { DAYS, normalizeDay, todayName } from '../lib/days'
 import { cn } from '../lib/cn'
 import SearchBox from '../components/SearchBox'
+import Seo from '../components/Seo'
+import { breadcrumb, pageTitle } from '../lib/site'
+import { SITE_URL } from '../lib/siteUrl'
 import {
   AnimeCard,
   Card,
@@ -48,6 +51,11 @@ export function OngoingPage() {
 
   return (
     <div className="space-y-4">
+      <Seo
+        title={pageTitle(`Anime Ongoing Sub Indo Terbaru${page > 1 ? ` – Halaman ${page}` : ''}`)}
+        description="Daftar anime ongoing subtitle Indonesia yang masih rilis episode baru tiap minggu. Update episode terbaru setiap hari."
+        path={page > 1 ? `/ongoing?page=${page}` : '/ongoing'}
+      />
       <PageTitle title="Sedang Tayang" subtitle="Masih rilis episode baru tiap minggu" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -86,6 +94,11 @@ export function CompletedPage() {
 
   return (
     <div className="space-y-4">
+      <Seo
+        title={pageTitle(`Anime Tamat Sub Indo Lengkap${page > 1 ? ` – Halaman ${page}` : ''}`)}
+        description="Daftar anime tamat subtitle Indonesia dengan episode lengkap, pas buat maraton. Lengkap dengan skor dan jumlah episode."
+        path={page > 1 ? `/tamat?page=${page}` : '/tamat'}
+      />
       <PageTitle title="Sudah Tamat" subtitle="Episodenya udah lengkap, pas buat maraton" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -125,6 +138,12 @@ export function SearchPage() {
 
   return (
     <div className="space-y-4">
+      <Seo
+        title={pageTitle(q ? `Hasil pencarian “${q}”` : 'Cari Anime')}
+        description="Cari anime subtitle Indonesia berdasarkan judul."
+        path={q ? `/cari?q=${encodeURIComponent(q)}` : '/cari'}
+        noindex
+      />
       <PageTitle title="Cari" subtitle={q ? `Hasil buat “${q}”` : undefined} />
       <SearchBox key={q} className="lg:hidden" />
       {!q ? (
@@ -170,6 +189,11 @@ export function GenresPage() {
 
   return (
     <div className="space-y-4">
+      <Seo
+        title={pageTitle('Daftar Genre Anime Sub Indo')}
+        description="Cari anime subtitle Indonesia berdasarkan genre: action, adventure, comedy, romance, isekai, slice of life, dan lainnya."
+        path="/genre"
+      />
       <PageTitle title="Genre" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -206,6 +230,18 @@ export function GenrePage() {
 
   return (
     <div className="space-y-4">
+      <Seo
+        title={pageTitle(`Anime ${genreTitle} Sub Indo${page > 1 ? ` – Halaman ${page}` : ''}`)}
+        description={`Kumpulan anime genre ${genreTitle} subtitle Indonesia. Nonton gratis, lengkap dengan skor, studio, dan jumlah episode.`}
+        path={page > 1 ? `/genre/${genreId}?page=${page}` : `/genre/${genreId}`}
+        jsonLd={[
+          breadcrumb(SITE_URL, [
+            { name: 'Beranda', path: '/' },
+            { name: 'Genre', path: '/genre' },
+            { name: genreTitle, path: `/genre/${genreId}` },
+          ]),
+        ]}
+      />
       <PageTitle title={genreTitle} subtitle="Genre" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -253,6 +289,11 @@ export function SchedulePage() {
 
   return (
     <div className="space-y-4">
+      <Seo
+        title={pageTitle('Jadwal Rilis Anime Sub Indo Minggu Ini')}
+        description="Jadwal tayang anime ongoing subtitle Indonesia dari Senin sampai Minggu. Cek anime apa aja yang rilis hari ini."
+        path="/jadwal"
+      />
       <PageTitle title="Jadwal Rilis" subtitle="Anime ongoing yang tayang tiap minggu" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
@@ -309,6 +350,11 @@ export function AzPage() {
 
   return (
     <div className="space-y-4">
+      <Seo
+        title={pageTitle('Daftar Anime Sub Indo A–Z')}
+        description="Daftar lengkap semua anime subtitle Indonesia, urut abjad dari A sampai Z."
+        path="/daftar"
+      />
       <PageTitle title="Daftar A–Z" subtitle="Semua anime, urut abjad" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />

@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Bookmark, CalendarDays, Home, LayoutGrid, Search } from 'lucide-react'
 import { cn } from '../lib/cn'
 import SearchBox from './SearchBox'
+import { Skeleton } from './ui'
 
 type NavItem = { to: string; label: string; icon: typeof Home; match: (path: string) => boolean }
 
@@ -76,7 +77,9 @@ export default function Layout() {
       {/* Lembaran konten bersudut melengkung */}
       <main className="relative min-h-[calc(100dvh-68px)] rounded-t-[28px] bg-canvas bg-[linear-gradient(var(--c-surface),var(--c-canvas)_360px)]">
         <div className="mx-auto max-w-5xl px-4 pb-28 pt-5 md:pb-12">
-          <Outlet />
+          <Suspense fallback={<Skeleton className="h-64 rounded-[20px]" />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 

@@ -4,6 +4,8 @@ import { clearHistory, removeHistory, toggleWatchlist, useLibrary } from '../lib
 import { shortEpisodeLabel } from '../lib/episodes'
 import { timeAgo } from '../lib/time'
 import { cn } from '../lib/cn'
+import Seo from '../components/Seo'
+import { DEFAULT_DESCRIPTION, pageTitle } from '../lib/site'
 import { AnimeCard, Card, CardGrid, EmptyState, PageTitle, Poster } from '../components/ui'
 
 /** Tab Koleksi | Riwayat. */
@@ -41,6 +43,7 @@ export function WatchlistPage() {
 
   return (
     <div className="space-y-4">
+      <Seo title={pageTitle('Koleksi')} description={DEFAULT_DESCRIPTION} path="/koleksi" noindex />
       <PageTitle title="Koleksi" />
       <LibraryTabs />
       {watchlist.length === 0 ? (
@@ -75,6 +78,7 @@ export function HistoryPage() {
 
   return (
     <div className="space-y-4">
+      <Seo title={pageTitle('Riwayat Nonton')} description={DEFAULT_DESCRIPTION} path="/riwayat" noindex />
       <PageTitle
         title="Koleksi"
         action={
@@ -130,6 +134,7 @@ export function HistoryPage() {
 export function NotFoundPage() {
   return (
     <EmptyState icon={<span className="text-sm font-bold">404</span>} title="Halaman nggak ada">
+      <Seo title={pageTitle('Halaman Tidak Ditemukan')} description={DEFAULT_DESCRIPTION} path="/404" noindex />
       <Link to="/" className="mt-2 inline-block rounded-full bg-primary-500 px-5 py-2.5 text-sm font-semibold text-on-primary">
         Ke Beranda
       </Link>

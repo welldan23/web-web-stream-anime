@@ -13,6 +13,7 @@ export function Poster({ src, alt, className }: { src?: string; alt: string; cla
           src={src}
           alt={alt}
           loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
           className="h-full w-full object-cover"
           onError={(e) => {

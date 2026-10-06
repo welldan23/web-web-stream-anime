@@ -6,6 +6,10 @@ import { api, type Server } from '../lib/api'
 import { recordWatch, useLibrary } from '../lib/library'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { cn } from '../lib/cn'
+import Seo from '../components/Seo'
+import { ApiError } from '../lib/api'
+import { DEFAULT_DESCRIPTION, episodeMeta, pageTitle, titleFromSlug } from '../lib/site'
+import { SITE_URL } from '../lib/siteUrl'
 import { Card, Chip, ErrorState, Notice, Pill, Skeleton } from '../components/ui'
 
 function GroupTitle({ children }: { children: React.ReactNode }) {
@@ -70,7 +74,24 @@ export default function WatchPage() {
     panel.scrollTop = item.offsetTop - panel.clientHeight / 2 + item.clientHeight / 2
   }, [episodes, episodeId])
 
-  if (episode.error) return <ErrorState error={episode.error} onRetry={() => episode.refetch()} />
+  const seo = ep ? (
+    <Seo {...episodeMeta(SITE_URL, episodeId, ep, anime.data)} />
+  ) : (
+    <Seo
+      title={pageTitle(`Nonton ${titleFromSlug(episodeId)} Sub Indo`)}
+      description={DEFAULT_DESCRIPTION}
+      path={`/nonton/${episodeId}`}
+      noindex={episode.error instanceof ApiError && episode.error.status === 404}
+    />
+  )
+
+  if (episode.error)
+    return (
+      <>
+        {seo}
+        <ErrorState error={episode.error} onRetry={() => episode.refetch()} />
+      </>
+    )
 
   const src = streamUrl ?? ep?.defaultStreamingUrl
   const qualities = ep?.server.qualityList.filter((q) => q.serverList && q.serverList.length > 0) ?? []
@@ -79,6 +100,7 @@ export default function WatchPage() {
 
   return (
     <div className="space-y-4">
+      {seo}
       {ep ? (
         <Link
           to={`/anime/${ep.animeId}`}

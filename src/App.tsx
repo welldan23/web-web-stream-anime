@@ -1,18 +1,23 @@
+import { lazy } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
-import AnimePage from './pages/AnimePage'
-import WatchPage from './pages/WatchPage'
-import {
-  AzPage,
-  CompletedPage,
-  GenrePage,
-  GenresPage,
-  OngoingPage,
-  SchedulePage,
-  SearchPage,
-} from './pages/BrowsePages'
-import { HistoryPage, NotFoundPage, WatchlistPage } from './pages/LibraryPages'
+
+// Halaman selain beranda dimuat pas dibuka aja, biar JS awal lebih kecil & web lebih cepat
+const AnimePage = lazy(() => import('./pages/AnimePage'))
+const WatchPage = lazy(() => import('./pages/WatchPage'))
+const browse = () => import('./pages/BrowsePages')
+const library = () => import('./pages/LibraryPages')
+const SchedulePage = lazy(() => browse().then((m) => ({ default: m.SchedulePage })))
+const OngoingPage = lazy(() => browse().then((m) => ({ default: m.OngoingPage })))
+const CompletedPage = lazy(() => browse().then((m) => ({ default: m.CompletedPage })))
+const GenresPage = lazy(() => browse().then((m) => ({ default: m.GenresPage })))
+const GenrePage = lazy(() => browse().then((m) => ({ default: m.GenrePage })))
+const AzPage = lazy(() => browse().then((m) => ({ default: m.AzPage })))
+const SearchPage = lazy(() => browse().then((m) => ({ default: m.SearchPage })))
+const WatchlistPage = lazy(() => library().then((m) => ({ default: m.WatchlistPage })))
+const HistoryPage = lazy(() => library().then((m) => ({ default: m.HistoryPage })))
+const NotFoundPage = lazy(() => library().then((m) => ({ default: m.NotFoundPage })))
 
 export default function App() {
   return (

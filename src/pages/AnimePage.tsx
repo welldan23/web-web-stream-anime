@@ -7,6 +7,10 @@ import { shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { isInWatchlist, toggleWatchlist, useLibrary } from '../lib/library'
 import { cn } from '../lib/cn'
 import BackButton from '../components/BackButton'
+import Seo from '../components/Seo'
+import { ApiError } from '../lib/api'
+import { animeMeta, pageTitle, titleFromSlug, DEFAULT_DESCRIPTION } from '../lib/site'
+import { SITE_URL } from '../lib/siteUrl'
 import { AnimeCard, Card, CardGrid, CardSection, ErrorState, Pill, Poster, Score, Skeleton } from '../components/ui'
 
 function InfoRow({ label, value, isLast }: { label: string; value?: string; isLast?: boolean }) {
@@ -37,9 +41,19 @@ export default function AnimePage() {
     return f ? ordered.filter((e) => shortEpisodeLabel(e.title).toLowerCase().includes(f)) : ordered
   }, [data, newestFirst, filter])
 
+  const fallbackSeo = (
+    <Seo
+      title={pageTitle(`Nonton ${titleFromSlug(animeId)} Sub Indo`)}
+      description={DEFAULT_DESCRIPTION}
+      path={`/anime/${animeId}`}
+      noindex={error instanceof ApiError && error.status === 404}
+    />
+  )
+
   if (error)
     return (
       <div className="space-y-4">
+        {fallbackSeo}
         <BackButton />
         <ErrorState error={error} onRetry={() => refetch()} />
       </div>
@@ -48,6 +62,7 @@ export default function AnimePage() {
   if (isLoading || !data)
     return (
       <div className="space-y-4">
+        {fallbackSeo}
         <BackButton />
         <Skeleton className="h-52 rounded-[20px]" />
         <Skeleton className="h-64 rounded-[20px]" />
@@ -73,6 +88,7 @@ export default function AnimePage() {
 
   return (
     <div className="space-y-4">
+      <Seo {...animeMeta(SITE_URL, animeId, data)} />
       <BackButton />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">

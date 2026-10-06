@@ -6,6 +6,9 @@ import App from './App'
 import { ApiError } from './lib/api'
 import './index.css'
 
+// Hapus meta tag bawaan dari index.html; gantinya dirender komponen <Seo> per halaman
+document.head.querySelectorAll('[data-seo]').forEach((el) => el.remove())
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
