@@ -78,6 +78,31 @@ Yang udah disiapin biar gampang ketemu di Google & rapi pas dibagikan:
 - Lebih cepat dimuat: tiap halaman dipecah jadi file JS sendiri, gambar *lazy load*, *preconnect* ke API, cache file statis 1 tahun.
 - Gambar preview `public/og-image.png`, ikon aplikasi, dan `manifest.webmanifest`.
 
+### Tes SEO di localhost (nggak perlu Vercel)
+
+Fungsi suntik meta tag juga jalan di `npm run dev` dan `npm run preview`, jadi bisa dicek di laptop:
+
+```sh
+# pastikan wajik-anime-api jalan di http://localhost:3001, lalu:
+npm run dev
+
+# lihat HTML mentah kayak bot WhatsApp/Google lihat (tanpa JavaScript)
+curl -s http://localhost:5173/anime/one-piece-sub-indo | grep -E "<title|og:"
+```
+
+Di browser: buka halaman mana aja → tab browser nunjukin judulnya, atau klik kanan → **Inspect** → lihat bagian `<head>`.
+
+Buat ngecek status **404** beneran, sitemap, dan robots.txt, pakai mode produksi:
+
+```sh
+VITE_SITE_URL=http://localhost:4173 npm run build
+npm run preview
+curl -I http://localhost:4173/anime/judul-ngawur      # HTTP/1.1 404
+curl http://localhost:4173/sitemap.xml
+```
+
+> Preview link WhatsApp/Facebook **nggak bisa** dites di localhost, karena server mereka nggak bisa ngakses laptop kamu. Kalau mau nyoba sebelum deploy, buka sementara ke internet pakai tunnel, misalnya `npx cloudflared tunnel --url http://localhost:4173`, terus tempel link-nya ke [opengraph.xyz](https://www.opengraph.xyz).
+
 Setelah online, daftarin web kamu di **Google Search Console** terus kirim `https://web-kamu/sitemap.xml` biar cepat diindeks.
 
 ## Struktur Folder
@@ -88,7 +113,8 @@ src/
 ├── lib/          # api.ts (client API), library.ts (koleksi & riwayat), site.ts (data SEO), helper lain
 └── pages/        # Beranda, Detail, Nonton, Jelajah (ongoing/tamat/genre/jadwal/A–Z/cari), Koleksi & Riwayat
 api/meta.ts       # fungsi Vercel: suntik meta tag SEO ke halaman anime & episode
-seo/              # plugin Vite: sitemap.xml, robots.txt, preconnect
+seo/render.ts     # logika suntik meta tag (dipakai Vercel & localhost)
+seo/              # plugin Vite: sitemap.xml, robots.txt, preconnect, meta tag di dev/preview
 ```
 
 ## Catatan

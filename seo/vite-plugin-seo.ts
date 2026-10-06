@@ -1,12 +1,20 @@
-// Plugin Vite: bikin robots.txt + sitemap.xml waktu `npm run build`,
-// dan pasang preconnect ke API biar request pertama lebih cepat.
+// Plugin Vite:
+// - bikin robots.txt + sitemap.xml waktu `npm run build`
+// - pasang preconnect ke API biar request pertama lebih cepat
+// - waktu `npm run dev` / `npm run preview`, suntik meta tag ke halaman anime &
+//   episode persis kayak fungsi Vercel api/meta.ts (biar bisa dites di localhost)
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import type { Plugin } from 'vite'
+import { parseTarget, renderPage } from './render.ts'
 
 interface Options {
   /** Alamat web, mis. https://animeku.vercel.app (tanpa "/" di akhir). */
   siteUrl?: string
-  /** Alamat wajik-anime-api yang bisa diakses waktu build, buat ngisi sitemap. */
+  /** Alamat wajik-anime-api di produksi (buat preconnect & sitemap). */
   apiUrl?: string
+  /** Alamat wajik-anime-api di laptop, mis. http://localhost:3001 (buat dev/preview & sitemap lokal). */
+  localApiUrl?: string
 }
 
 const STATIC_ROUTES = [
@@ -54,16 +62,45 @@ async function collectUrls(apiUrl: string | undefined, log: (msg: string) => voi
   return urls
 }
 
-export default function seoPlugin({ siteUrl, apiUrl }: Options): Plugin {
+export default function seoPlugin({ siteUrl, apiUrl, localApiUrl }: Options): Plugin {
   const site = siteUrl?.replace(/\/+$/, '')
+  const localApi = apiUrl || localApiUrl
+  let outDir = 'dist'
   const apiOrigin = apiUrl && /^https?:\/\//.test(apiUrl) ? new URL(apiUrl).origin : undefined
 
   return {
     name: 'animeku-seo',
 
-    transformIndexHtml(html) {
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir)
+    },
+
+    // `npm run preview`: halaman anime/episode dikirim dengan meta tag + status 404 kalau nggak ada
+    configurePreviewServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+        if (req.method !== 'GET' || !parseTarget(url)) return next()
+        try {
+          const shell = await readFile(path.join(outDir, 'index.html'), 'utf-8')
+          const result = await renderPage(shell, { url, api: localApi, site: site ?? url.origin })
+          res.statusCode = result.status
+          res.setHeader('content-type', 'text/html; charset=utf-8')
+          res.end(result.html)
+        } catch (error) {
+          next(error)
+        }
+      })
+    },
+
+    async transformIndexHtml(html, ctx) {
       // og:image wajib alamat lengkap (Facebook/WhatsApp nggak mau path relatif)
-      const out = site ? html.replace('content="/og-image.png"', `content="${site}/og-image.png"`) : html
+      let out = site ? html.replace('content="/og-image.png"', `content="${site}/og-image.png"`) : html
+      // `npm run dev`: suntik meta tag halaman anime/episode (status tetap 200 di mode dev)
+      if (ctx.server && ctx.originalUrl) {
+        const origin = (ctx.server.resolvedUrls?.local[0] ?? 'http://localhost:5173/').replace(/\/+$/, '')
+        const url = new URL(ctx.originalUrl, origin)
+        if (parseTarget(url)) out = (await renderPage(out, { url, api: localApi, site: site ?? origin })).html
+      }
       const tags = apiOrigin
         ? [
             { tag: 'link', attrs: { rel: 'preconnect', href: apiOrigin, crossorigin: '' }, injectTo: 'head' as const },
@@ -90,7 +127,7 @@ export default function seoPlugin({ siteUrl, apiUrl }: Options): Plugin {
         this.warn('VITE_SITE_URL belum diisi: sitemap.xml nggak dibuat (butuh alamat lengkap web).')
         return
       }
-      const urls = await collectUrls(apiUrl, log)
+      const urls = await collectUrls(localApi, log)
       const today = new Date().toISOString().slice(0, 10)
       const xml = [
         '<?xml version="1.0" encoding="UTF-8"?>',

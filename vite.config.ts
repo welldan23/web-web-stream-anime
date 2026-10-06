@@ -11,7 +11,11 @@ export default defineConfig(({ mode }) => {
   const serverApi = env.API_URL || (/^https?:\/\//.test(env.VITE_API_URL ?? '') ? env.VITE_API_URL : undefined)
 
   return {
-    plugins: [react(), tailwindcss(), seoPlugin({ siteUrl: env.VITE_SITE_URL, apiUrl: serverApi })],
+    plugins: [
+      react(),
+      tailwindcss(),
+      seoPlugin({ siteUrl: env.VITE_SITE_URL, apiUrl: serverApi, localApiUrl: apiTarget }),
+    ],
     server: {
       port: 5173,
       // Request ke /api/* diteruskan ke wajik-anime-api, jadi nggak kena masalah CORS
