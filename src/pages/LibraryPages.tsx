@@ -130,7 +130,7 @@ export function HistoryPage() {
 export function NotFoundPage() {
   return (
     <EmptyState icon={<span className="text-sm font-bold">404</span>} title="Halaman nggak ada">
-      <Link to="/" className="mt-2 inline-block rounded-full bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white">
+      <Link to="/" className="mt-2 inline-block rounded-full bg-primary-500 px-5 py-2.5 text-sm font-semibold text-on-primary">
         Ke Beranda
       </Link>
     </EmptyState>

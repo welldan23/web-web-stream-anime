@@ -1,94 +1,60 @@
 @import 'tailwindcss';
 
 /*
- * Palet ngikutin MyWallet (wallet-custodial): header teal, aksen biru,
- * kartu putih di atas kanvas abu muda. Nilai aslinya di variabel --c-*,
- * jadi mode gelap cukup ganti variabelnya.
+ * Palet gelap bernuansa kopi: header coklat tua, kanvas hampir hitam
+ * kecoklatan, kartu coklat gelap, aksen karamel. Struktur & nama warnanya
+ * sama kayak MyWallet (wallet-custodial), cuma nilainya yang diganti.
  */
 :root {
-  --c-teal-300: #86dad4;
-  --c-teal-400: #5ecec8;
-  --c-teal-500: #3bc1bb;
+  /* header */
+  --c-brand-300: #2a1e17;
+  --c-brand-400: #3d2b20;
+  --c-brand-500: #573d2b;
 
-  --c-primary-50: #eef4ff;
-  --c-primary-100: #dce8ff;
-  --c-primary-500: #2f6bf2;
-  --c-primary-600: #2457d6;
+  /* aksen karamel; -50/-100 = latar redup, -600 = teks di atas latar redup */
+  --c-primary-50: #2e2219;
+  --c-primary-100: #3b2b1e;
+  --c-primary-500: #c8894f;
+  --c-primary-600: #e2ac78;
+  /* teks di atas tombol karamel */
+  --c-on-primary: #1a110b;
 
-  --c-success-50: #e6f6ec;
-  --c-success-500: #1fa35b;
-  --c-success-600: #178a4b;
+  --c-success-50: #18241a;
+  --c-success-500: #6aab78;
+  --c-success-600: #96cba1;
 
-  --c-warning-50: #fff5e6;
-  --c-warning-500: #f59e0b;
-  --c-warning-600: #b26a00;
+  --c-warning-50: #30230f;
+  --c-warning-500: #e0a03a;
+  --c-warning-600: #f0c172;
 
-  --c-danger-50: #fdeded;
-  --c-danger-500: #e5484d;
-  --c-danger-600: #c2353a;
+  --c-danger-50: #321816;
+  --c-danger-500: #d9675e;
+  --c-danger-600: #f0928a;
 
-  --c-ink: #0f172a;
-  --c-ink-soft: #334155;
-  --c-ink-muted: #64748b;
-  --c-ink-faint: #94a3b8;
+  --c-ink: #f3ebe3;
+  --c-ink-soft: #d8cabd;
+  --c-ink-muted: #a8978a;
+  --c-ink-faint: #7a6b60;
 
-  --c-canvas: #f3f5f9;
-  --c-surface: #ffffff;
-  --c-subtle: #f1f4f8;
-  --c-tile: #edf2f9;
-  --c-line: #e8edf3;
+  --c-canvas: #120e0b;
+  --c-surface: #1d1713;
+  --c-subtle: #251d18;
+  --c-tile: #2b221c;
+  --c-line: #352a22;
 
-  --card-shadow: 0 2px 12px rgb(15 23 42 / 0.06);
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --c-teal-300: #1d5c59;
-    --c-teal-400: #22716d;
-    --c-teal-500: #2a8a85;
-
-    --c-primary-50: #172648;
-    --c-primary-100: #1e315c;
-    --c-primary-500: #4a80f5;
-    --c-primary-600: #7aa3fa;
-
-    --c-success-50: #0f2e1f;
-    --c-success-500: #2cb86c;
-    --c-success-600: #5bd892;
-
-    --c-warning-50: #33250b;
-    --c-warning-500: #f5a524;
-    --c-warning-600: #f8be5c;
-
-    --c-danger-50: #3a1518;
-    --c-danger-500: #ef5a5f;
-    --c-danger-600: #ff8589;
-
-    --c-ink: #e9eef6;
-    --c-ink-soft: #c2ccdb;
-    --c-ink-muted: #8c99af;
-    --c-ink-faint: #64728a;
-
-    --c-canvas: #0b1120;
-    --c-surface: #141c2d;
-    --c-subtle: #1b2437;
-    --c-tile: #1e2940;
-    --c-line: #27324a;
-
-    --card-shadow: 0 2px 12px rgb(0 0 0 / 0.25);
-    color-scheme: dark;
-  }
+  --card-shadow: 0 2px 12px rgb(0 0 0 / 0.35);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-teal-300: var(--c-teal-300);
-  --color-teal-400: var(--c-teal-400);
-  --color-teal-500: var(--c-teal-500);
+  --color-brand-300: var(--c-brand-300);
+  --color-brand-400: var(--c-brand-400);
+  --color-brand-500: var(--c-brand-500);
   --color-primary-50: var(--c-primary-50);
   --color-primary-100: var(--c-primary-100);
   --color-primary-500: var(--c-primary-500);
   --color-primary-600: var(--c-primary-600);
+  --color-on-primary: var(--c-on-primary);
   --color-success-50: var(--c-success-50);
   --color-success-500: var(--c-success-500);
   --color-success-600: var(--c-success-600);

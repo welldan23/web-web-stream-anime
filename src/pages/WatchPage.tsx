@@ -251,7 +251,7 @@ function EpisodeNav({ to, dir }: { to?: string; dir: 'prev' | 'next' }) {
   return (
     <Link
       to={`/nonton/${to}`}
-      className={cn(base, 'active:opacity-80', prev ? 'bg-tile text-ink' : 'bg-primary-500 text-white')}
+      className={cn(base, 'active:opacity-80', prev ? 'bg-tile text-ink' : 'bg-primary-500 text-on-primary')}
     >
       {content}
     </Link>

@@ -304,7 +304,7 @@ export function AzPage() {
   const letterBtn = (active: boolean) =>
     cn(
       'h-9 min-w-9 rounded-full px-2.5 text-sm font-semibold active:opacity-70',
-      active ? 'bg-primary-500 text-white' : 'bg-surface text-ink-soft shadow-card',
+      active ? 'bg-primary-500 text-on-primary' : 'bg-surface text-ink-soft shadow-card',
     )
 
   return (

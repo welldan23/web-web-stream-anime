@@ -105,9 +105,9 @@ export default function AnimePage() {
               {target ? (
                 <Link
                   to={`/nonton/${target}`}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary-500 px-5 py-3 text-[15px] font-semibold text-white active:opacity-80"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary-500 px-5 py-3 text-[15px] font-semibold text-on-primary active:opacity-80"
                 >
-                  <Play className="size-4 fill-white" />
+                  <Play className="size-4 fill-on-primary" />
                   {lastWatched ? `Lanjut ${shortEpisodeLabel(lastWatched.episodeTitle)}` : 'Mulai Nonton'}
                 </Link>
               ) : null}

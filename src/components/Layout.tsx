@@ -21,7 +21,7 @@ const desktopPills = [home, schedule, genre, library]
 const mobilePills = [home, schedule, library]
 const bottomNav = [home, schedule, search, library]
 
-/** Menu pil di header teal: aktif = putih, sisanya transparan. */
+/** Menu pil di header: aktif = putih, sisanya transparan. */
 function Pills({ items, pathname, className }: { items: NavItem[]; pathname: string; className?: string }) {
   return (
     <nav className={cn('flex gap-2', className)}>
@@ -34,10 +34,10 @@ function Pills({ items, pathname, className }: { items: NavItem[]; pathname: str
             aria-current={active ? 'page' : undefined}
             className={cn(
               'flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2.5 text-sm font-semibold transition active:opacity-80 md:flex-none md:px-4',
-              active ? 'bg-surface text-ink' : 'bg-white/25 text-white hover:bg-white/35',
+              active ? 'bg-surface text-ink' : 'bg-white/10 text-ink-soft hover:bg-white/15',
             )}
           >
-            <Icon className={cn('size-[17px] shrink-0', active ? 'text-primary-500' : 'text-white')} />
+            <Icon className={cn('size-[17px] shrink-0', active ? 'text-primary-500' : 'text-ink-soft')} />
             <span className="truncate">{label}</span>
           </Link>
         )
@@ -54,20 +54,20 @@ export default function Layout() {
   }, [pathname])
 
   return (
-    <div className="relative min-h-dvh bg-teal-300">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-gradient-to-br from-teal-500 via-teal-400 to-teal-300" />
+    <div className="relative min-h-dvh bg-brand-300">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-gradient-to-br from-brand-500 via-brand-400 to-brand-300" />
 
       <header className="relative mx-auto flex max-w-5xl items-center gap-3 px-4 pb-4 pt-3 sm:gap-5 sm:pt-4">
-        <Link to="/" className="hidden shrink-0 text-xl font-bold tracking-tight text-white sm:block">
+        <Link to="/" className="hidden shrink-0 text-xl font-bold tracking-tight text-ink sm:block">
           Animeku
         </Link>
         <Pills items={desktopPills} pathname={pathname} className="hidden md:flex" />
         <Pills items={mobilePills} pathname={pathname} className="flex-1 md:hidden" />
-        <SearchBox key={pathname + query} onTeal className="ml-auto hidden w-64 lg:block" />
+        <SearchBox key={pathname + query} onHeader className="ml-auto hidden w-64 lg:block" />
         <Link
           to="/cari"
           aria-label="Cari"
-          className="ml-auto hidden size-11 shrink-0 place-items-center rounded-full bg-white/25 text-white active:opacity-80 md:grid lg:hidden"
+          className="ml-auto hidden size-11 shrink-0 place-items-center rounded-full bg-white/10 text-ink-soft active:opacity-80 md:grid lg:hidden"
         >
           <Search className="size-5" />
         </Link>

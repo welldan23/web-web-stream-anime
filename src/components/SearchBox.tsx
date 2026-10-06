@@ -4,10 +4,10 @@ import { Search, X } from 'lucide-react'
 import { cn } from '../lib/cn'
 
 /**
- * Kotak pencarian. `onTeal` = versi transparan buat di atas header teal.
+ * Kotak pencarian. `onHeader` = versi transparan buat di atas header.
  * Isi awal ngikutin ?q= di halaman /cari (di-remount lewat key tiap URL berubah).
  */
-export default function SearchBox({ className, onTeal }: { className?: string; onTeal?: boolean }) {
+export default function SearchBox({ className, onHeader }: { className?: string; onHeader?: boolean }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [params] = useSearchParams()
@@ -24,7 +24,7 @@ export default function SearchBox({ className, onTeal }: { className?: string; o
       <Search
         className={cn(
           'pointer-events-none absolute left-4 top-1/2 size-[18px] -translate-y-1/2',
-          onTeal ? 'text-white' : 'text-ink-faint',
+          onHeader ? 'text-ink-muted' : 'text-ink-faint',
         )}
       />
       <input
@@ -34,8 +34,8 @@ export default function SearchBox({ className, onTeal }: { className?: string; o
         enterKeyHint="search"
         className={cn(
           'h-11 w-full rounded-full pl-11 pr-10 text-[15px] outline-none transition',
-          onTeal
-            ? 'bg-white/25 text-white placeholder:text-white/80 focus:bg-white/35'
+          onHeader
+            ? 'bg-white/10 text-ink placeholder:text-ink-muted focus:bg-white/15'
             : 'border border-line bg-surface text-ink shadow-card placeholder:text-ink-faint focus:border-primary-500',
         )}
       />
@@ -45,7 +45,7 @@ export default function SearchBox({ className, onTeal }: { className?: string; o
           onClick={() => setValue('')}
           className={cn(
             'absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full',
-            onTeal ? 'text-white' : 'text-ink-faint',
+            onHeader ? 'text-ink-muted' : 'text-ink-faint',
           )}
           aria-label="Hapus pencarian"
         >
