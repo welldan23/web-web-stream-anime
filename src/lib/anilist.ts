@@ -152,7 +152,7 @@ const MIN_SCORE = 0.6
 
 /**
  * Pilih item yang judulnya paling mirip sama salah satu `names` (nomor season harus sama).
- * Dipakai buat nyocokin judul antar sumber (AniList, trace.moe, otakudesu, kuramanime).
+ * Dipakai buat nyocokin judul antar sumber (AniList, trace.moe, Otakudesu, Oploverz).
  */
 export function bestTitleMatch<T>(items: T[], getTitle: (item: T) => string, names: string[], min = MIN_SCORE) {
   const wanted = Math.max(1, ...names.map((n) => seasonNumber(n) ?? 1))

@@ -2,7 +2,7 @@
 
 Web streaming anime subtitle Indonesia. Fiturnya ala **Tatakai** (player dengan pilihan server, koleksi, riwayat nonton), tampilannya ngikutin gaya **MyWallet** ([wallet-custodial](https://github.com/welldan23/wallet-custodial)): header dengan menu pil dan kartu bersudut bulat, tapi pakai **tema gelap nuansa kopi**: coklat tua dengan aksen karamel.
 
-Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wajik-anime-api)** (sumber: Otakudesu). Animeku nggak nyimpen atau nge-host video apa pun.
+Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wajik-anime-api)**: **data anime dari Otakudesu**, **video dari Oploverz** (server utama). Animeku nggak nyimpen atau nge-host video apa pun.
 
 ## Fitur
 
@@ -13,9 +13,8 @@ Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wa
 - **Pencarian** anime, plus **Cari Pakai Gambar**: upload/tempel screenshot → ketahuan judul, episode & menit adegannya lewat [trace.moe](https://trace.moe), terus langsung dicocokin ke otakudesu biar bisa ditonton (`src/lib/tracemoe.ts`)
 - **Detail anime**: info lengkap, sinopsis, daftar episode (bisa diurutkan & dicari), tanda episode yang udah ditonton, rekomendasi
 - **Data tambahan dari [AniList](https://anilist.co)** di halaman detail: banner HD, skor/popularitas/favorit, hitung mundur episode berikutnya, trailer YouTube, karakter + seiyuu, dan link ke AniList/MyAnimeList. Judul otakudesu dicocokin otomatis ke AniList (`src/lib/anilist.ts`); kalau nggak yakin cocok, bagian ini disembunyiin aja
-- **Server cadangan Oploverz**: episode yang dibuka otomatis dicariin juga di Oploverz (lewat wajik). Muncul sebagai pilihan **Cadangan**, dan otomatis dipakai kalau server Vidhide gagal semua (`src/lib/oploverz.ts`)
-- **Server bebas iklan (Kuramanime)**: *lagi dimatiin* karena Kuramanime nolak wajik (403 Cloudflare). Kodenya tetap ada; nyalain lagi lewat `KURAMANIME_ENABLED` di `src/lib/kuramanime.ts` kalau udah bisa diakses. Kalau nyala, episode dicari di Kuramanime dan diputar pakai player Animeku sendiri tanpa iklan (`src/components/DirectPlayer.tsx`)
-- **Halaman nonton**: server lancar (**Vidhide**) dipilih otomatis, kalau gagal pindah sendiri ke server berikutnya, dan pilihan server/kualitas diingat buat episode selanjutnya (daftar server andalan di `src/lib/servers.ts`). Ada tombol **blokir pop-up iklan** (pakai `sandbox` di iframe) yang nyegah tab iklan kebuka & halaman dibajak (otomatis dilewati buat Vidhide, karena Vidhide nolak muter kalau di-sandbox), plus link **buka di tab baru**; episode sebelumnya/berikutnya, link download
+- **Server video**: tiap episode otomatis dicariin di **Oploverz** dan diputar dari situ (server utama, `src/lib/oploverz.ts`). Kalau episodenya belum ada di Oploverz, otomatis pakai server Otakudesu yang lancar (Vidhide), terus player bawaan kalau masih gagal
+- **Halaman nonton**: pilihan server (Utama Oploverz / Cadangan Otakudesu / Server lain), pilihan diingat buat episode selanjutnya, tombol **blokir pop-up iklan** (pakai `sandbox` di iframe; otomatis dilewati buat Vidhide yang nolak di-sandbox), link **buka di tab baru**, episode sebelumnya/berikutnya, dan daftar episode
 - **Fakta anime**: "Fakta Anime Hari Ini" di beranda & "Tahukah kamu?" di halaman detail (One Piece, Naruto, Demon Slayer, AoT, JJK, HxH, Dragon Ball, dll). Data dari [AnimeFacts](https://github.com/chandan-02/anime-facts-rest-api) (MIT), diterjemahin & disaring, disimpan di `src/data/animeFacts.ts` karena server API aslinya udah mati
 - **Koleksi** (watchlist) dan **Riwayat** — disimpan di browser (localStorage), nggak perlu login
 - Responsif: menu pil di header, navigasi bawah di HP

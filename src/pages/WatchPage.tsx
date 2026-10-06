@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import {
   autoCandidates,
   canSandbox,
@@ -17,12 +17,9 @@ import {
 } from '../lib/servers'
 import { recordWatch, useLibrary } from '../lib/library'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
+import { findOploverz } from '../lib/oploverz'
 import { cn } from '../lib/cn'
 import Seo from '../components/Seo'
-import DirectPlayer from '../components/DirectPlayer'
-import { findDirectSources, KURAMANIME_ENABLED, preferredQuality, rememberQuality } from '../lib/kuramanime'
-import { findOploverz } from '../lib/oploverz'
-import { ApiError } from '../lib/api'
 import { DEFAULT_DESCRIPTION, episodeMeta, pageTitle, titleFromSlug } from '../lib/site'
 import { SITE_URL } from '../lib/siteUrl'
 import { Card, Chip, ErrorState, Notice, Pill, Skeleton } from '../components/ui'
@@ -31,58 +28,48 @@ function GroupTitle({ children }: { children: React.ReactNode }) {
   return <p className="px-1 text-xs font-semibold uppercase text-ink-faint">{children}</p>
 }
 
+/**
+ * Halaman nonton. Data episode dari Otakudesu, tapi videonya:
+ * 1. Oploverz (server utama) — episode yang sama dicariin otomatis
+ * 2. kalau nggak ada di Oploverz: server Otakudesu yang lancar (Vidhide)
+ * 3. kalau itu juga gagal: player bawaan Otakudesu
+ */
 export default function WatchPage() {
   const { episodeId = '' } = useParams()
   const library = useLibrary()
-  // server yang dipilih manual, diikat ke episode-nya; 'default' = player bawaan otakudesu
+  // server yang dipilih manual, diikat ke episode-nya
+  // 'oploverz' = server utama, 'default' = player bawaan otakudesu, selain itu = serverId otakudesu
   const [picked, setPicked] = useState<{ episodeId: string; serverId: string } | null>(null)
+  const [blockPopups, setBlockPopups] = useState(readBlockPopups)
   const activeEpisodeRef = useRef<HTMLAnchorElement>(null)
 
   const episode = useQuery({ queryKey: ['episode', episodeId], queryFn: () => api.episode(episodeId) })
-  const animeId = episode.data?.animeId
+  const ep = episode.data
+  const animeId = ep?.animeId
   const anime = useQuery({
     queryKey: ['anime', animeId],
     queryFn: () => api.anime(animeId!),
     enabled: Boolean(animeId),
   })
-
-  const ep = episode.data
   const epNumber = ep ? episodeNumber(ep.title) : null
-  const options = useMemo(() => flattenServers(ep?.server.qualityList ?? []), [ep])
-  const [blockPopups, setBlockPopups] = useState(readBlockPopups)
-  const candidates = useMemo(() => autoCandidates(options, blockPopups), [options, blockPopups])
-  const manual = picked?.episodeId === episodeId ? picked.serverId : null
-  // 'direct:720p' = user milih kualitas tertentu di server bebas iklan
-  const manualDirect = manual?.startsWith('direct:') ? manual.slice('direct:'.length) : null
-
-  // Server bebas iklan: cari episode yang sama di Kuramanime (link video langsung)
   const animeTitle = anime.data?.title
-  const direct = useQuery({
-    queryKey: ['direct', ep?.animeId, epNumber],
-    queryFn: () => findDirectSources(animeTitle!, epNumber!),
-    enabled: KURAMANIME_ENABLED && Boolean(animeTitle) && epNumber !== null,
-    staleTime: 1000 * 60 * 30,
-    retry: false,
-  })
-  // episode yang video bebas iklannya gagal diputar → jangan dicoba lagi, pakai server biasa
-  const [directFailed, setDirectFailed] = useState<string | null>(null)
-  const directSources = directFailed === episodeId ? [] : (direct.data?.sources ?? [])
-  const useDirect = directSources.length > 0 && (!manual || manualDirect !== null)
-  const directQuality = manualDirect ?? preferredQuality(directSources)
-  // tunggu hasil pencarian bebas iklan dulu sebelum muter server biasa, biar player nggak gonta-ganti
-  const deciding = !manual && (anime.isLoading || direct.isLoading)
+  const manual = picked?.episodeId === episodeId ? picked.serverId : null
 
-  // Server cadangan: episode yang sama di Oploverz (dicari di belakang layar)
-  const backup = useQuery({
-    queryKey: ['oploverz', ep?.animeId, epNumber],
+  // 1. Server utama: episode yang sama di Oploverz
+  const main = useQuery({
+    queryKey: ['oploverz', animeId, epNumber],
     queryFn: () => findOploverz(animeTitle!, epNumber!),
     enabled: Boolean(animeTitle) && epNumber !== null,
     staleTime: 1000 * 60 * 30,
     retry: false,
   })
-  const backupUrl = backup.data?.url
+  const mainUrl = main.data?.url
+  // tunggu hasil Oploverz dulu sebelum pakai server Otakudesu, biar player nggak gonta-ganti
+  const deciding = !manual && (anime.isLoading || main.isLoading)
 
-  // Otomatis: coba server andalan satu per satu sampai ada yang ngasih link
+  // 2. Cadangan: server Otakudesu yang lancar, dicoba satu per satu
+  const options = useMemo(() => flattenServers(ep?.server.qualityList ?? []), [ep])
+  const candidates = useMemo(() => autoCandidates(options, blockPopups), [options, blockPopups])
   const auto = useQuery({
     queryKey: ['server-auto', episodeId, candidates.map((c) => c.serverId)],
     queryFn: async () => {
@@ -92,66 +79,50 @@ export default function WatchPage() {
       }
       return null
     },
-    enabled: Boolean(ep) && !manual && candidates.length > 0 && !deciding && !useDirect,
+    enabled: Boolean(ep) && !manual && candidates.length > 0 && !deciding && !mainUrl,
     staleTime: 1000 * 60 * 30,
     retry: false,
   })
 
-  // Manual: user milih server sendiri
+  // Manual: user milih server Otakudesu sendiri
   const chosen = useQuery({
     queryKey: ['server', manual],
     queryFn: () => api.server(manual!),
-    enabled: Boolean(manual) && manual !== 'default' && manual !== 'oploverz' && !manualDirect,
+    enabled: Boolean(manual) && manual !== 'default' && manual !== 'oploverz',
     staleTime: 1000 * 60 * 30,
     retry: false,
   })
 
-  const pickServer = (o: ServerOption | 'default') => {
-    if (o !== 'default') rememberServer(o)
-    setPicked({ episodeId, serverId: o === 'default' ? 'default' : o.serverId })
+  const pickServer = (o: ServerOption | 'default' | 'oploverz') => {
+    if (o !== 'default' && o !== 'oploverz') rememberServer(o)
+    setPicked({ episodeId, serverId: typeof o === 'string' ? o : o.serverId })
   }
 
-  const pickBackup = () => setPicked({ episodeId, serverId: 'oploverz' })
+  const usingAuto = candidates.length > 0
+  const otakudesuServer = usingAuto ? (auto.data?.serverId ?? (auto.data === null ? 'default' : null)) : 'default'
+  const otakudesuSrc = usingAuto ? (auto.data === null ? ep?.defaultStreamingUrl : auto.data?.url) : ep?.defaultStreamingUrl
 
-  const usingAuto = !manual && candidates.length > 0
-  // kalau server andalan gagal semua: pakai cadangan Oploverz dulu, baru player bawaan
-  const fallbackServer = backupUrl ? 'oploverz' : 'default'
-  const fallbackSrc = backupUrl ?? ep?.defaultStreamingUrl
-  const iframeServer = manual ?? (usingAuto ? (auto.data?.serverId ?? (auto.data === null ? fallbackServer : null)) : 'default')
-  const activeServer = useDirect ? `direct:${directQuality}` : iframeServer
-  const iframeSrc = manual
-    ? manual === 'default'
-      ? ep?.defaultStreamingUrl
-      : manual === 'oploverz'
-        ? backupUrl
-        : chosen.data
-    : usingAuto
-      ? auto.data === null
-        ? fallbackSrc
-        : auto.data?.url
-      : ep?.defaultStreamingUrl
-  const directUrl = directSources.find((s) => s.quality === directQuality)?.url ?? directSources[0]?.url
-  const src = useDirect ? directUrl : iframeSrc
+  const activeServer = manual ?? (mainUrl ? 'oploverz' : otakudesuServer)
+  const src =
+    manual === 'oploverz'
+      ? mainUrl
+      : manual === 'default'
+        ? ep?.defaultStreamingUrl
+        : manual
+          ? chosen.data
+          : (mainUrl ?? otakudesuSrc)
   const playerLoading =
     episode.isLoading ||
-    (!useDirect &&
-      (deciding ||
-        (manual === 'oploverz'
-          ? backup.isLoading
-          : manual
-            ? manual !== 'default' && chosen.isLoading
-            : usingAuto && (auto.isLoading || (auto.data === null && backup.isLoading)))))
+    (manual === 'oploverz'
+      ? main.isLoading
+      : manual
+        ? manual !== 'default' && chosen.isLoading
+        : deciding || (!mainUrl && usingAuto && auto.isLoading))
   const serverError =
-    !useDirect && manual && manual !== 'default' && (manual === 'oploverz' ? !backup.isLoading && !backupUrl : chosen.isError)
-  const autoFailed = !useDirect && !manual && usingAuto && auto.data === null
-  const pickDirect = (quality: string) => {
-    rememberQuality(quality)
-    setPicked({ episodeId, serverId: `direct:${quality}` })
-  }
-  const onDirectFail = () => {
-    setDirectFailed(episodeId)
-    if (manualDirect) setPicked(null)
-  }
+    manual === 'oploverz' ? !main.isLoading && !mainUrl : Boolean(manual) && manual !== 'default' && chosen.isError
+  // Oploverz nggak punya episode ini → otomatis pakai server Otakudesu
+  const notOnMain = !manual && !deciding && !mainUrl
+  const otakudesuFailed = notOnMain && usingAuto && auto.data === null
 
   // simpan ke riwayat setelah data episode (dan anime, kalau ada) kelar dimuat
   const animeSettled = !animeId || anime.isSuccess || anime.isError
@@ -203,8 +174,8 @@ export default function WatchPage() {
   const activeOption = options.find((o) => o.serverId === activeServer)
   // sebagian server (Vidhide) nolak muter kalau di-sandbox, jadi blokir pop-up dilewati buat server itu
   const sandboxed = blockPopups && canSandbox(activeOption)
-  const sandboxSkipped = !useDirect && blockPopups && !sandboxed && activeOption
-  const downloads = ep?.download.qualityList.filter((q) => q.urlList && q.urlList.length > 0) ?? []
+  const sandboxSkipped = blockPopups && !sandboxed && activeOption
+  const activeLabel = activeServer === 'oploverz' ? 'Oploverz' : activeOption ? serverLabel(activeOption) : null
 
   return (
     <div className="space-y-4">
@@ -228,8 +199,6 @@ export default function WatchPage() {
               <div className="absolute inset-0 grid place-items-center">
                 <Loader2 className="size-8 animate-spin text-white/70" />
               </div>
-            ) : useDirect && directQuality ? (
-              <DirectPlayer key={episodeId} episodeId={episodeId} sources={directSources} quality={directQuality} onFail={onDirectFail} />
             ) : src ? (
               <iframe
                 // key ikut status blokir: atribut sandbox cuma kebaca waktu iframe dibuat ulang
@@ -267,51 +236,41 @@ export default function WatchPage() {
             </div>
           </Card>
 
-          {directFailed === episodeId ? (
-            <Notice>Server bebas iklan nggak bisa diputar buat episode ini, jadi pindah ke server biasa.</Notice>
-          ) : null}
           {serverError ? <Notice tone="danger">Server ini lagi bermasalah. Coba pilih server lain.</Notice> : null}
-          {autoFailed ? (
+          {notOnMain && !playerLoading ? (
             <Notice>
-              Server lancar lagi nggak bisa buat episode ini, jadi diputar pakai{' '}
-              {backupUrl ? 'cadangan Oploverz' : 'player bawaan'}.
+              Episode ini belum ada di Oploverz, jadi diputar pakai{' '}
+              {otakudesuFailed || !usingAuto ? 'player bawaan Otakudesu' : 'server cadangan Otakudesu'}.
             </Notice>
           ) : null}
 
           <div className="space-y-2">
             <GroupTitle>Server</GroupTitle>
             <Card className="px-4">
-              {directSources.length > 0 ? (
-                <div className="border-b border-line py-3">
-                  <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
-                    <ShieldCheck className="size-4 text-success-500" /> Bebas iklan
-                    <span className="font-normal text-ink-muted">· Kuramanime</span>
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {directSources.map((d) => (
-                      <Chip
-                        size="sm"
-                        key={d.quality}
-                        active={activeServer === `direct:${d.quality}`}
-                        onClick={() => pickDirect(d.quality)}
-                      >
-                        {d.quality}
-                      </Chip>
-                    ))}
-                  </div>
-                </div>
-              ) : direct.isLoading ? (
-                <p className="flex items-center gap-2 border-b border-line py-3 text-xs text-ink-muted">
-                  <Loader2 className="size-3.5 animate-spin" /> Lagi nyari server bebas iklan…
+              <div className="py-3">
+                <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+                  <span className="size-2 rounded-full bg-success-500" /> Utama
+                  <span className="font-normal text-ink-muted">
+                    · Oploverz{activeLabel ? ` · lagi diputar: ${activeLabel}` : ''}
+                  </span>
                 </p>
-              ) : null}
+                {mainUrl ? (
+                  <Chip size="sm" active={activeServer === 'oploverz'} onClick={() => pickServer('oploverz')}>
+                    Oploverz
+                  </Chip>
+                ) : main.isLoading || anime.isLoading ? (
+                  <p className="flex items-center gap-2 text-xs text-ink-muted">
+                    <Loader2 className="size-3.5 animate-spin" /> Lagi nyari di Oploverz…
+                  </p>
+                ) : (
+                  <p className="text-xs text-ink-muted">Episode ini belum ada di Oploverz.</p>
+                )}
+              </div>
               {reliable.length > 0 ? (
-                <div className="py-3">
+                <div className="border-t border-line py-3">
                   <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
-                    <span className="size-2 rounded-full bg-success-500" /> Lancar
-                    {activeOption ? (
-                      <span className="font-normal text-ink-muted">· lagi diputar: {serverLabel(activeOption)}</span>
-                    ) : null}
+                    <span className="size-2 rounded-full bg-primary-500" /> Cadangan
+                    <span className="font-normal text-ink-muted">· Otakudesu</span>
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {reliable.map((o) => (
@@ -322,24 +281,7 @@ export default function WatchPage() {
                   </div>
                 </div>
               ) : null}
-              <div className={cn('py-3', (reliable.length > 0 || directSources.length > 0) && 'border-t border-line')}>
-                <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
-                  <span className="size-2 rounded-full bg-primary-500" /> Cadangan
-                  <span className="font-normal text-ink-muted">· Oploverz</span>
-                </p>
-                {backupUrl ? (
-                  <Chip size="sm" active={activeServer === 'oploverz'} onClick={pickBackup}>
-                    Oploverz
-                  </Chip>
-                ) : backup.isLoading ? (
-                  <p className="flex items-center gap-2 text-xs text-ink-muted">
-                    <Loader2 className="size-3.5 animate-spin" /> Lagi nyari di Oploverz…
-                  </p>
-                ) : (
-                  <p className="text-xs text-ink-muted">Episode ini nggak ketemu di Oploverz.</p>
-                )}
-              </div>
-              <details className="group border-t border-line py-3" open={reliable.length === 0 && !backupUrl}>
+              <details className="group border-t border-line py-3">
                 <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-ink-muted">
                   Server lain
                   <span className="font-normal">· sering error</span>
@@ -359,7 +301,7 @@ export default function WatchPage() {
             </Card>
             <div className="flex items-start justify-between gap-3 px-1">
               <p className="text-xs text-ink-muted">
-                Server lancar dipilih otomatis. Pilihan kamu diingat buat episode berikutnya.
+                Oploverz diputar duluan. Kalau episodenya belum ada, otomatis pakai server Otakudesu.
               </p>
               {src ? (
                 // cadangan kalau player nggak mau jalan di dalam web: buka langsung di tab baru
@@ -385,8 +327,8 @@ export default function WatchPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-semibold text-ink">Blokir pop-up iklan</span>
                   <span className="block text-xs leading-relaxed text-ink-muted">
-                    Cegah tab iklan kebuka & halaman pindah sendiri pas video diklik. Kalau video nggak mau
-                    muter, matiin ini.
+                    Cegah tab iklan kebuka & halaman pindah sendiri pas video diklik. Kalau video nggak mau muter,
+                    matiin ini.
                   </span>
                 </span>
                 <input
@@ -407,45 +349,13 @@ export default function WatchPage() {
             </Card>
             {sandboxSkipped ? (
               <p className="px-1 text-xs text-warning-600">
-                {serverLabel(sandboxSkipped)} nolak muter kalau pop-up diblokir, jadi buat server ini blokirnya
-                dilewatin.
+                {serverLabel(sandboxSkipped)} nolak muter kalau pop-up diblokir, jadi buat server ini blokirnya dilewatin.
               </p>
             ) : null}
             <p className="px-1 text-xs text-ink-muted">
               Iklan yang tampil di dalam video berasal dari server videonya, jadi nggak bisa dihapus dari sini.
             </p>
           </div>
-
-          {downloads.length > 0 ? (
-            <div className="space-y-2">
-              <GroupTitle>Download</GroupTitle>
-              <Card className="px-4">
-                {downloads.map((q, i) => (
-                  <div
-                    key={q.title}
-                    className={cn('flex flex-wrap items-center gap-2 py-3', i < downloads.length - 1 && 'border-b border-line')}
-                  >
-                    <div className="mr-auto min-w-28">
-                      <p className="text-sm font-semibold text-ink">{q.title}</p>
-                      {q.size ? <p className="text-xs text-ink-muted">{q.size}</p> : null}
-                    </div>
-                    {q.urlList!.map((u, j) => (
-                      <a
-                        key={`${u.title}-${j}`}
-                        href={u.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-3 py-1.5 text-[13px] font-semibold text-primary-600 active:opacity-70"
-                      >
-                        {u.title}
-                        <ExternalLink className="size-3" />
-                      </a>
-                    ))}
-                  </div>
-                ))}
-              </Card>
-            </div>
-          ) : null}
         </div>
 
         <div className="space-y-2">

@@ -144,7 +144,7 @@ export class ApiError extends Error {
 
 type Params = Record<string, string | number | undefined>
 
-/** Ambil data dari salah satu sumber wajik-anime-api (otakudesu, kuramanime, ...). */
+/** Ambil data dari salah satu sumber wajik-anime-api (otakudesu, oploverz, ...). */
 export async function getFrom<T>(
   source: string,
   path: string,
