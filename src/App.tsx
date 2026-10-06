@@ -6,6 +6,7 @@ import HomePage from './pages/HomePage'
 // Halaman selain beranda dimuat pas dibuka aja, biar JS awal lebih kecil & web lebih cepat
 const AnimePage = lazy(() => import('./pages/AnimePage'))
 const WatchPage = lazy(() => import('./pages/WatchPage'))
+const ImageSearchPage = lazy(() => import('./pages/ImageSearchPage'))
 const browse = () => import('./pages/BrowsePages')
 const library = () => import('./pages/LibraryPages')
 const SchedulePage = lazy(() => browse().then((m) => ({ default: m.SchedulePage })))
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="genre/:genreId" element={<GenrePage />} />
         <Route path="daftar" element={<AzPage />} />
         <Route path="cari" element={<SearchPage />} />
+        <Route path="cari-gambar" element={<ImageSearchPage />} />
         <Route path="anime/:animeId" element={<AnimePage />} />
         <Route path="nonton/:episodeId" element={<WatchPage />} />
         <Route path="koleksi" element={<WatchlistPage />} />

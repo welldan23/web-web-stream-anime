@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { ChevronRight, Search, SearchX } from 'lucide-react'
+import { ChevronRight, ImageUp, Search, SearchX } from 'lucide-react'
 import { api } from '../lib/api'
 import { DAYS, normalizeDay, todayName } from '../lib/days'
 import { cn } from '../lib/cn'
@@ -146,6 +146,19 @@ export function SearchPage() {
       />
       <PageTitle title="Cari" subtitle={q ? `Hasil buat “${q}”` : undefined} />
       <SearchBox key={q} className="lg:hidden" />
+      <Link
+        to="/cari-gambar"
+        className="flex items-center gap-3 rounded-[20px] bg-surface px-4 py-3.5 shadow-card active:opacity-70"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary-50 text-primary-500">
+          <ImageUp className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold text-ink">Cari pakai screenshot</span>
+          <span className="block text-[13px] text-ink-muted">Lupa judulnya? Upload gambar adegannya aja</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-ink-faint" />
+      </Link>
       {!q ? (
         <EmptyState icon={<Search className="size-5" />} title="Mau nonton apa?">
           Ketik judul anime, misalnya “One Piece” atau “Frieren”.

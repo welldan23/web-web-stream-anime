@@ -7,6 +7,7 @@ import { shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { isInWatchlist, toggleWatchlist, useLibrary } from '../lib/library'
 import { cn } from '../lib/cn'
 import BackButton from '../components/BackButton'
+import { AnimeFactCard } from '../components/AnimeFacts'
 import { AniListBanner, AniListStats, Characters, ExternalLinks, NextEpisode, Trailer } from '../components/AniList'
 import { findAniList, seasonLabel } from '../lib/anilist'
 import Seo from '../components/Seo'
@@ -168,6 +169,8 @@ export default function AnimePage() {
               </button>
             </CardSection>
           ) : null}
+
+          <AnimeFactCard titles={[data.title, al?.title.romaji, al?.title.english]} />
 
           {al ? <Trailer media={al} title={data.title} /> : null}
 

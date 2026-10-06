@@ -10,10 +10,11 @@ Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wa
 - **Jadwal rilis** per hari (otomatis kebuka di hari ini)
 - **Sedang Tayang / Sudah Tamat** dengan halaman (pagination)
 - **Genre** dan **Daftar A–Z** (bisa disaring)
-- **Pencarian** anime
+- **Pencarian** anime, plus **Cari Pakai Gambar**: upload/tempel screenshot → ketahuan judul, episode & menit adegannya lewat [trace.moe](https://trace.moe), terus langsung dicocokin ke otakudesu biar bisa ditonton (`src/lib/tracemoe.ts`)
 - **Detail anime**: info lengkap, sinopsis, daftar episode (bisa diurutkan & dicari), tanda episode yang udah ditonton, rekomendasi
 - **Data tambahan dari [AniList](https://anilist.co)** di halaman detail: banner HD, skor/popularitas/favorit, hitung mundur episode berikutnya, trailer YouTube, karakter + seiyuu, dan link ke AniList/MyAnimeList. Judul otakudesu dicocokin otomatis ke AniList (`src/lib/anilist.ts`); kalau nggak yakin cocok, bagian ini disembunyiin aja
 - **Halaman nonton**: server lancar (**Vidhide**) dipilih otomatis, kalau gagal pindah sendiri ke server berikutnya, dan pilihan server/kualitas diingat buat episode selanjutnya (daftar server andalan di `src/lib/servers.ts`). Ada tombol **blokir pop-up iklan** (pakai `sandbox` di iframe) yang nyegah tab iklan kebuka & halaman dibajak (otomatis dilewati buat Vidhide, karena Vidhide nolak muter kalau di-sandbox), plus link **buka di tab baru**; episode sebelumnya/berikutnya, link download
+- **Fakta anime**: "Fakta Anime Hari Ini" di beranda & "Tahukah kamu?" di halaman detail (One Piece, Naruto, Demon Slayer, AoT, JJK, HxH, Dragon Ball, dll). Data dari [AnimeFacts](https://github.com/chandan-02/anime-facts-rest-api) (MIT), diterjemahin & disaring, disimpan di `src/data/animeFacts.ts` karena server API aslinya udah mati
 - **Koleksi** (watchlist) dan **Riwayat** — disimpan di browser (localStorage), nggak perlu login
 - Responsif: menu pil di header, navigasi bawah di HP
 

@@ -20,6 +20,7 @@ import {
 } from '../components/ui'
 import { cn } from '../lib/cn'
 import Seo from '../components/Seo'
+import { DailyFactCard } from '../components/AnimeFacts'
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, websiteJsonLd } from '../lib/site'
 import { SITE_URL } from '../lib/siteUrl'
 
@@ -120,6 +121,8 @@ export default function HomePage() {
       {isLoading ? <Skeleton className="h-28 rounded-[20px]" /> : <TopCard today={today} />}
 
       <Shortcuts />
+
+      <DailyFactCard />
 
       {today.length > 0 ? (
         <CardSection title="Rilis Hari Ini" more={{ to: '/jadwal', label: 'Jadwal' }}>

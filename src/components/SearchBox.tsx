@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Search, X } from 'lucide-react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { ImageUp, Search, X } from 'lucide-react'
 import { cn } from '../lib/cn'
 
 /**
@@ -51,7 +51,19 @@ export default function SearchBox({ className, onHeader }: { className?: string;
         >
           <X className="size-4" />
         </button>
-      ) : null}
+      ) : (
+        <Link
+          to="/cari-gambar"
+          className={cn(
+            'absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full',
+            onHeader ? 'text-ink-muted hover:text-ink' : 'text-ink-faint hover:text-ink',
+          )}
+          aria-label="Cari pakai gambar"
+          title="Cari pakai gambar"
+        >
+          <ImageUp className="size-4" />
+        </Link>
+      )}
     </form>
   )
 }

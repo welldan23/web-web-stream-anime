@@ -24,6 +24,7 @@ const STATIC_ROUTES = [
   { path: '/tamat', changefreq: 'weekly', priority: '0.7' },
   { path: '/genre', changefreq: 'monthly', priority: '0.6' },
   { path: '/daftar', changefreq: 'weekly', priority: '0.6' },
+  { path: '/cari-gambar', changefreq: 'monthly', priority: '0.5' },
 ]
 
 const xmlEscape = (s: string) =>
