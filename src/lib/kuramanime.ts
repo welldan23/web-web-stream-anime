@@ -6,6 +6,13 @@
 // atau ditolak (kalau dikunci cuma buat situs mereka). Makanya semua gagal = disembunyiin
 // dan halaman nonton balik ke server otakudesu.
 import { getFrom } from './api'
+
+/**
+ * Dimatiin dulu: Kuramanime (v20.kuramanime.ing) nolak wajik dengan 403 (Cloudflare).
+ * Kalau nanti udah bisa diakses lagi dari server, ganti jadi `true` biar server
+ * bebas iklan nyala lagi.
+ */
+export const KURAMANIME_ENABLED = false
 import { bestTitleMatch, cleanTitle } from './anilist'
 
 interface KuraAnimeCard {

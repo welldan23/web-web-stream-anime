@@ -20,7 +20,8 @@ import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episod
 import { cn } from '../lib/cn'
 import Seo from '../components/Seo'
 import DirectPlayer from '../components/DirectPlayer'
-import { findDirectSources, preferredQuality, rememberQuality } from '../lib/kuramanime'
+import { findDirectSources, KURAMANIME_ENABLED, preferredQuality, rememberQuality } from '../lib/kuramanime'
+import { findOploverz } from '../lib/oploverz'
 import { ApiError } from '../lib/api'
 import { DEFAULT_DESCRIPTION, episodeMeta, pageTitle, titleFromSlug } from '../lib/site'
 import { SITE_URL } from '../lib/siteUrl'
@@ -59,7 +60,7 @@ export default function WatchPage() {
   const direct = useQuery({
     queryKey: ['direct', ep?.animeId, epNumber],
     queryFn: () => findDirectSources(animeTitle!, epNumber!),
-    enabled: Boolean(animeTitle) && epNumber !== null,
+    enabled: KURAMANIME_ENABLED && Boolean(animeTitle) && epNumber !== null,
     staleTime: 1000 * 60 * 30,
     retry: false,
   })
@@ -70,6 +71,16 @@ export default function WatchPage() {
   const directQuality = manualDirect ?? preferredQuality(directSources)
   // tunggu hasil pencarian bebas iklan dulu sebelum muter server biasa, biar player nggak gonta-ganti
   const deciding = !manual && (anime.isLoading || direct.isLoading)
+
+  // Server cadangan: episode yang sama di Oploverz (dicari di belakang layar)
+  const backup = useQuery({
+    queryKey: ['oploverz', ep?.animeId, epNumber],
+    queryFn: () => findOploverz(animeTitle!, epNumber!),
+    enabled: Boolean(animeTitle) && epNumber !== null,
+    staleTime: 1000 * 60 * 30,
+    retry: false,
+  })
+  const backupUrl = backup.data?.url
 
   // Otomatis: coba server andalan satu per satu sampai ada yang ngasih link
   const auto = useQuery({
@@ -90,7 +101,7 @@ export default function WatchPage() {
   const chosen = useQuery({
     queryKey: ['server', manual],
     queryFn: () => api.server(manual!),
-    enabled: Boolean(manual) && manual !== 'default' && !manualDirect,
+    enabled: Boolean(manual) && manual !== 'default' && manual !== 'oploverz' && !manualDirect,
     staleTime: 1000 * 60 * 30,
     retry: false,
   })
@@ -100,16 +111,23 @@ export default function WatchPage() {
     setPicked({ episodeId, serverId: o === 'default' ? 'default' : o.serverId })
   }
 
+  const pickBackup = () => setPicked({ episodeId, serverId: 'oploverz' })
+
   const usingAuto = !manual && candidates.length > 0
-  const iframeServer = manual ?? (usingAuto ? (auto.data?.serverId ?? (auto.data === null ? 'default' : null)) : 'default')
+  // kalau server andalan gagal semua: pakai cadangan Oploverz dulu, baru player bawaan
+  const fallbackServer = backupUrl ? 'oploverz' : 'default'
+  const fallbackSrc = backupUrl ?? ep?.defaultStreamingUrl
+  const iframeServer = manual ?? (usingAuto ? (auto.data?.serverId ?? (auto.data === null ? fallbackServer : null)) : 'default')
   const activeServer = useDirect ? `direct:${directQuality}` : iframeServer
   const iframeSrc = manual
     ? manual === 'default'
       ? ep?.defaultStreamingUrl
-      : chosen.data
+      : manual === 'oploverz'
+        ? backupUrl
+        : chosen.data
     : usingAuto
       ? auto.data === null
-        ? ep?.defaultStreamingUrl
+        ? fallbackSrc
         : auto.data?.url
       : ep?.defaultStreamingUrl
   const directUrl = directSources.find((s) => s.quality === directQuality)?.url ?? directSources[0]?.url
@@ -117,8 +135,14 @@ export default function WatchPage() {
   const playerLoading =
     episode.isLoading ||
     (!useDirect &&
-      (deciding || (manual ? manual !== 'default' && chosen.isLoading : usingAuto && auto.isLoading)))
-  const serverError = !useDirect && manual && manual !== 'default' && chosen.isError
+      (deciding ||
+        (manual === 'oploverz'
+          ? backup.isLoading
+          : manual
+            ? manual !== 'default' && chosen.isLoading
+            : usingAuto && (auto.isLoading || (auto.data === null && backup.isLoading)))))
+  const serverError =
+    !useDirect && manual && manual !== 'default' && (manual === 'oploverz' ? !backup.isLoading && !backupUrl : chosen.isError)
   const autoFailed = !useDirect && !manual && usingAuto && auto.data === null
   const pickDirect = (quality: string) => {
     rememberQuality(quality)
@@ -248,7 +272,10 @@ export default function WatchPage() {
           ) : null}
           {serverError ? <Notice tone="danger">Server ini lagi bermasalah. Coba pilih server lain.</Notice> : null}
           {autoFailed ? (
-            <Notice>Server lancar lagi nggak bisa buat episode ini, jadi diputar pakai player bawaan.</Notice>
+            <Notice>
+              Server lancar lagi nggak bisa buat episode ini, jadi diputar pakai{' '}
+              {backupUrl ? 'cadangan Oploverz' : 'player bawaan'}.
+            </Notice>
           ) : null}
 
           <div className="space-y-2">
@@ -295,7 +322,24 @@ export default function WatchPage() {
                   </div>
                 </div>
               ) : null}
-              <details className={cn('group py-3', reliable.length > 0 && 'border-t border-line')} open={reliable.length === 0}>
+              <div className={cn('py-3', (reliable.length > 0 || directSources.length > 0) && 'border-t border-line')}>
+                <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+                  <span className="size-2 rounded-full bg-primary-500" /> Cadangan
+                  <span className="font-normal text-ink-muted">· Oploverz</span>
+                </p>
+                {backupUrl ? (
+                  <Chip size="sm" active={activeServer === 'oploverz'} onClick={pickBackup}>
+                    Oploverz
+                  </Chip>
+                ) : backup.isLoading ? (
+                  <p className="flex items-center gap-2 text-xs text-ink-muted">
+                    <Loader2 className="size-3.5 animate-spin" /> Lagi nyari di Oploverz…
+                  </p>
+                ) : (
+                  <p className="text-xs text-ink-muted">Episode ini nggak ketemu di Oploverz.</p>
+                )}
+              </div>
+              <details className="group border-t border-line py-3" open={reliable.length === 0 && !backupUrl}>
                 <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-ink-muted">
                   Server lain
                   <span className="font-normal">· sering error</span>
