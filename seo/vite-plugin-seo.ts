@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Plugin } from 'vite'
 import { parseTarget, renderPage } from './render.ts'
+import { GENRES } from '../src/lib/genres.ts'
 
 interface Options {
   /** Alamat web, mis. https://animeku.vercel.app (tanpa "/" di akhir). */
@@ -23,6 +24,7 @@ const STATIC_ROUTES = [
   { path: '/ongoing', changefreq: 'daily', priority: '0.9' },
   { path: '/tamat', changefreq: 'weekly', priority: '0.7' },
   { path: '/genre', changefreq: 'monthly', priority: '0.6' },
+  { path: '/film', changefreq: 'weekly', priority: '0.7' },
   { path: '/daftar', changefreq: 'weekly', priority: '0.6' },
   { path: '/cari-gambar', changefreq: 'monthly', priority: '0.5' },
 ]
@@ -46,20 +48,18 @@ async function collectUrls(apiUrl: string | undefined, log: (msg: string) => voi
     log('API_URL kosong, sitemap cuma berisi halaman utama.')
     return urls
   }
-  const base = `${apiUrl.replace(/\/+$/, '')}/otakudesu`
-  const [genres, all] = await Promise.all([
-    getJson<{ genreList: { genreId: string }[] }>(`${base}/genre`),
-    getJson<{ list: { animeList: { animeId: string }[] }[] }>(`${base}/anime`),
-  ])
-  for (const g of genres?.genreList ?? []) {
-    urls.push({ path: `/genre/${g.genreId}`, changefreq: 'weekly', priority: '0.5' })
+  const base = `${apiUrl.replace(/\/+$/, '')}/oploverz`
+  for (const g of GENRES) {
+    urls.push({ path: `/genre/${g.id}`, changefreq: 'weekly', priority: '0.5' })
   }
-  const animeIds = new Set((all?.list ?? []).flatMap((group) => group.animeList.map((a) => a.animeId)))
-  for (const id of animeIds) {
-    urls.push({ path: `/anime/${id}`, changefreq: 'weekly', priority: '0.8' })
+  // daftar A–Z Oploverz berisi semua anime
+  const dir = await getJson<{ sectionList: { animeList: { slug: string }[] }[] }>(`${base}/anime`)
+  const slugs = new Set((dir?.sectionList ?? []).flatMap((s) => s.animeList.map((a) => a.slug)).filter(Boolean))
+  for (const slug of slugs) {
+    urls.push({ path: `/anime/${slug}`, changefreq: 'weekly', priority: '0.8' })
   }
-  if (!genres && !all) log(`Gagal ambil data dari ${apiUrl}, sitemap cuma berisi halaman utama.`)
-  else log(`sitemap: ${animeIds.size} anime, ${genres?.genreList.length ?? 0} genre.`)
+  if (!dir) log(`Gagal ambil data dari ${apiUrl}, sitemap cuma berisi halaman utama & genre.`)
+  else log(`sitemap: ${slugs.size} anime, ${GENRES.length} genre.`)
   return urls
 }
 

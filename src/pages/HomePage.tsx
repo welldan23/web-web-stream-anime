@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, ChevronRight, LayoutGrid, ListOrdered, Tv } from 'lucide-react'
-import { api, type OngoingAnime } from '../lib/api'
+import { CheckCircle2, ChevronRight, Clapperboard, LayoutGrid, Tv } from 'lucide-react'
+import { api, type CardItem } from '../lib/api'
 import { normalizeDay, todayName } from '../lib/days'
 import { shortEpisodeLabel } from '../lib/episodes'
 import { timeAgo } from '../lib/time'
@@ -15,7 +15,6 @@ import {
   ListRow,
   Pill,
   Poster,
-  Score,
   Skeleton,
 } from '../components/ui'
 import { cn } from '../lib/cn'
@@ -25,16 +24,11 @@ import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, websiteJsonLd } from '../lib/site'
 import { SITE_URL } from '../lib/siteUrl'
 
 const homeSeo = (
-  <Seo
-    title={DEFAULT_TITLE}
-    description={DEFAULT_DESCRIPTION}
-    path="/"
-    jsonLd={[websiteJsonLd(SITE_URL)]}
-  />
+  <Seo title={DEFAULT_TITLE} description={DEFAULT_DESCRIPTION} path="/" jsonLd={[websiteJsonLd(SITE_URL)]} />
 )
 
 /** Kartu abu muda paling atas: lanjut nonton, atau ringkasan rilis hari ini. */
-function TopCard({ today }: { today: OngoingAnime[] }) {
+function TopCard({ today }: { today: CardItem[] | undefined }) {
   const { history } = useLibrary()
   const last = history[0]
 
@@ -64,7 +58,7 @@ function TopCard({ today }: { today: OngoingAnime[] }) {
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium text-ink-muted">Rilis hari ini · {todayName()}</p>
         <p className="mt-0.5 text-[32px] font-bold leading-tight tracking-tight text-ink">
-          {today.length} <span className="text-xl">anime</span>
+          {today ? today.length : '–'} <span className="text-xl">anime</span>
         </p>
         <p className="mt-1 text-[11px] font-medium text-ink-faint">Episode baru tiap minggu, sub Indo</p>
       </div>
@@ -78,8 +72,8 @@ function TopCard({ today }: { today: OngoingAnime[] }) {
 const SHORTCUTS = [
   { to: '/ongoing', label: 'Ongoing', icon: Tv, tile: 'bg-tile', color: 'text-primary-500' },
   { to: '/tamat', label: 'Tamat', icon: CheckCircle2, tile: 'bg-success-50', color: 'text-success-500' },
+  { to: '/film', label: 'Film', icon: Clapperboard, tile: 'bg-tile', color: 'text-primary-500' },
   { to: '/genre', label: 'Genre', icon: LayoutGrid, tile: 'bg-tile', color: 'text-primary-500' },
-  { to: '/daftar', label: 'A–Z', icon: ListOrdered, tile: 'bg-tile', color: 'text-primary-500' },
 ]
 
 function Shortcuts() {
@@ -99,8 +93,19 @@ function Shortcuts() {
   )
 }
 
+function Grid({ list }: { list: CardItem[] }) {
+  return (
+    <CardGrid>
+      {list.map((a, i) => (
+        <AnimeCard key={`${a.to}-${i}`} to={a.to} title={a.title} poster={a.poster} label={a.label} meta={a.meta} />
+      ))}
+    </CardGrid>
+  )
+}
+
 export default function HomePage() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['home'], queryFn: api.home })
+  const schedule = useQuery({ queryKey: ['schedule'], queryFn: api.schedule, staleTime: 1000 * 60 * 30 })
 
   if (error)
     return (
@@ -110,9 +115,7 @@ export default function HomePage() {
       </>
     )
 
-  const ongoing = data?.ongoing.animeList ?? []
-  const completed = data?.completed.animeList ?? []
-  const today = ongoing.filter((a) => normalizeDay(a.releaseDay) === normalizeDay(todayName()))
+  const today = schedule.data?.find((d) => normalizeDay(d.day) === normalizeDay(todayName()))?.animeList
 
   return (
     <div className="space-y-4">
@@ -124,17 +127,17 @@ export default function HomePage() {
 
       <DailyFactCard />
 
-      {today.length > 0 ? (
+      {today && today.length > 0 ? (
         <CardSection title="Rilis Hari Ini" more={{ to: '/jadwal', label: 'Jadwal' }}>
           <div>
             {today.slice(0, 5).map((a, i, arr) => (
               <ListRow
-                key={a.animeId}
-                to={`/anime/${a.animeId}`}
+                key={`${a.to}-${i}`}
+                to={a.to}
                 poster={a.poster}
                 title={a.title}
-                subtitle={`Update ${a.latestReleaseDate}`}
-                trailing={<Pill>Ep {a.episodes}</Pill>}
+                subtitle={a.meta}
+                trailing={a.label ? <Pill>{a.label}</Pill> : null}
                 isLast={i === arr.length - 1}
               />
             ))}
@@ -142,43 +145,15 @@ export default function HomePage() {
         </CardSection>
       ) : null}
 
-      <CardSection title="Sedang Tayang" more={{ to: '/ongoing' }}>
-        {isLoading ? (
-          <CardGridSkeleton />
-        ) : (
-          <CardGrid>
-            {ongoing.map((a) => (
-              <AnimeCard
-                key={a.animeId}
-                animeId={a.animeId}
-                title={a.title}
-                poster={a.poster}
-                label={`Ep ${a.episodes}`}
-                meta={a.releaseDay}
-              />
-            ))}
-          </CardGrid>
-        )}
+      <CardSection title="Rilis Terbaru" more={{ to: '/ongoing' }}>
+        {isLoading ? <CardGridSkeleton /> : <Grid list={data?.latest ?? []} />}
       </CardSection>
 
-      <CardSection title="Baru Tamat" more={{ to: '/tamat' }}>
-        {isLoading ? (
-          <CardGridSkeleton />
-        ) : (
-          <CardGrid>
-            {completed.map((a) => (
-              <AnimeCard
-                key={a.animeId}
-                animeId={a.animeId}
-                title={a.title}
-                poster={a.poster}
-                label={`${a.episodes} eps`}
-                meta={<Score score={a.score} />}
-              />
-            ))}
-          </CardGrid>
-        )}
-      </CardSection>
+      {isLoading || (data?.popular.length ?? 0) > 0 ? (
+        <CardSection title="Populer Hari Ini" more={{ to: '/daftar' }}>
+          {isLoading ? <CardGridSkeleton /> : <Grid list={data?.popular ?? []} />}
+        </CardSection>
+      ) : null}
     </div>
   )
 }

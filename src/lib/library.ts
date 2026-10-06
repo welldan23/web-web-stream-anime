@@ -24,7 +24,8 @@ interface LibraryState {
   watched: string[]
 }
 
-const KEY = 'animeku:library'
+// Sumber Oploverz. ID anime/episode Otakudesu yang lama beda, jadi koleksi & riwayat lama nggak dibawa.
+const KEY = 'animeku:library:oploverz'
 const MAX_HISTORY = 50
 const MAX_WATCHED = 2000
 

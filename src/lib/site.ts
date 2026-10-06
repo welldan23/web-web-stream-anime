@@ -214,3 +214,31 @@ export function titleFromSlug(slug: string) {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
 }
+
+/**
+ * Detail anime Oploverz (dari wajik) → bentuk yang dipakai animeMeta().
+ * Tipe ditulis manual (bukan import dari api.ts) biar file ini tetap bisa dipakai di server.
+ */
+export function animeLikeFromOploverz(d: {
+  title: string
+  poster?: string
+  status?: string
+  type?: string
+  studio?: string
+  releasedOn?: string
+  synopsis?: { paragraphList: string[] }
+  genres?: string[]
+  episodeList?: unknown[]
+}) {
+  return {
+    title: d.title,
+    poster: d.poster,
+    status: d.status,
+    type: d.type,
+    episodes: d.episodeList?.length ? String(d.episodeList.length) : undefined,
+    studios: d.studio,
+    aired: d.releasedOn,
+    synopsis: d.synopsis,
+    genreList: (d.genres ?? []).map((title) => ({ title })),
+  }
+}

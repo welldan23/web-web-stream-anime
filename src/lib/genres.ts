@@ -1,0 +1,38 @@
+// ---------- Genre ----------
+// Oploverz nggak punya endpoint daftar genre, jadi pakai daftar genre umum.
+// `id` = slug genre di Oploverz (dipakai filter ?genre=).
+
+export const GENRES = [
+  'Action',
+  'Adventure',
+  'Comedy',
+  'Demons',
+  'Drama',
+  'Ecchi',
+  'Fantasy',
+  'Game',
+  'Harem',
+  'Historical',
+  'Horror',
+  'Isekai',
+  'Josei',
+  'Magic',
+  'Martial Arts',
+  'Mecha',
+  'Military',
+  'Music',
+  'Mystery',
+  'Psychological',
+  'Romance',
+  'School',
+  'Sci-Fi',
+  'Seinen',
+  'Shoujo',
+  'Shounen',
+  'Slice of Life',
+  'Sports',
+  'Super Power',
+  'Supernatural',
+  'Thriller',
+  'Vampire',
+].map((title) => ({ title, id: title.toLowerCase().replace(/[^a-z0-9]+/g, '-') }))
