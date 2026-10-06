@@ -1,5 +1,5 @@
 // Vercel Edge Function: suntik meta tag (judul, deskripsi, poster, JSON-LD)
-// ke index.html buat halaman /anime/:id dan /nonton/:id.
+// ke index.html buat halaman /anime/:id/:slug dan /nonton/:id/:slug/:episode.
 //
 // Kenapa perlu? Bot WhatsApp/Facebook/Twitter/Discord nggak jalanin JavaScript,
 // jadi tanpa ini preview link-nya cuma judul default. Google juga dapet info

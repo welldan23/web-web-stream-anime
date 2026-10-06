@@ -1,7 +1,7 @@
 {
   "rewrites": [
-    { "source": "/anime/:id", "destination": "/api/meta?kind=anime&id=:id" },
-    { "source": "/nonton/:id", "destination": "/api/meta?kind=episode&id=:id" },
+    { "source": "/anime/:id/:slug", "destination": "/api/meta?kind=anime&id=:id&slug=:slug" },
+    { "source": "/nonton/:id/:slug/:ep", "destination": "/api/meta?kind=episode&id=:id&slug=:slug&ep=:ep" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

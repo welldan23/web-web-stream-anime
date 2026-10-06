@@ -102,7 +102,8 @@ export function Score({ score, className }: { score?: string; className?: string
 }
 
 interface AnimeCardProps {
-  animeId: string
+  /** Alamat tujuan, mis. animePath(a) atau episodePath(a, 12). */
+  to: string
   title: string
   poster?: string
   label?: string
@@ -110,9 +111,9 @@ interface AnimeCardProps {
 }
 
 /** Poster + judul. Label kecil di pojok kiri bawah poster (mis. "Ep 12"). */
-export function AnimeCard({ animeId, title, poster, label, meta }: AnimeCardProps) {
+export function AnimeCard({ to, title, poster, label, meta }: AnimeCardProps) {
   return (
-    <Link to={`/anime/${animeId}`} className="group block min-w-0">
+    <Link to={to} className="group block min-w-0">
       <div className="relative">
         <Poster src={poster} alt={title} className="aspect-[3/4] rounded-[14px] transition group-active:opacity-80" />
         {label ? (

@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowDownUp, Bookmark, BookmarkCheck, Check, Play, Search } from 'lucide-react'
-import { api } from '../lib/api'
-import { shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
+import { animeKey, animePath, api, ApiError, episodeKey, episodePath, episodeRange } from '../lib/api'
+import { shortEpisodeLabel } from '../lib/episodes'
 import { isInWatchlist, toggleWatchlist, useLibrary } from '../lib/library'
 import { cn } from '../lib/cn'
 import BackButton from '../components/BackButton'
@@ -11,10 +11,9 @@ import { AnimeFactCard } from '../components/AnimeFacts'
 import { AniListBanner, AniListStats, Characters, ExternalLinks, NextEpisode, Trailer } from '../components/AniList'
 import { findAniList, seasonLabel } from '../lib/anilist'
 import Seo from '../components/Seo'
-import { ApiError } from '../lib/api'
-import { animeMeta, pageTitle, titleFromSlug, DEFAULT_DESCRIPTION } from '../lib/site'
+import { animeLikeFromKuramanime, animeMeta, DEFAULT_DESCRIPTION, pageTitle, titleFromSlug } from '../lib/site'
 import { SITE_URL } from '../lib/siteUrl'
-import { AnimeCard, Card, CardGrid, CardSection, ErrorState, Pill, Poster, Score, Skeleton } from '../components/ui'
+import { Card, CardSection, ErrorState, ListRow, Pill, Poster, Score, Skeleton } from '../components/ui'
 
 function InfoRow({ label, value, isLast }: { label: string; value?: string; isLast?: boolean }) {
   if (!value) return null
@@ -26,16 +25,19 @@ function InfoRow({ label, value, isLast }: { label: string; value?: string; isLa
   )
 }
 
+const isFinished = (status: string) => /selesai|tamat|complete|finished/i.test(status)
+
 export default function AnimePage() {
-  const { animeId = '' } = useParams()
+  const { animeId = '', slug = '' } = useParams()
+  const key = `${animeId}/${slug}`
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['anime', animeId],
-    queryFn: () => api.anime(animeId),
+    queryKey: ['anime', animeId, slug],
+    queryFn: () => api.anime(animeId, slug),
   })
   // data tambahan dari AniList; kalau gagal/nggak ketemu, halaman tetap jalan tanpa bagian ini
   const { data: al } = useQuery({
-    queryKey: ['anilist', animeId],
-    queryFn: () => findAniList(animeId, data!.title, data!.japanese),
+    queryKey: ['anilist', key],
+    queryFn: () => findAniList(key, data!.title, data!.alternativeTitle),
     enabled: Boolean(data),
     staleTime: 1000 * 60 * 60 * 6,
     retry: 1,
@@ -46,17 +48,17 @@ export default function AnimePage() {
   const [expanded, setExpanded] = useState(false)
 
   const episodes = useMemo(() => {
-    const asc = sortEpisodesAsc(data?.episodeList ?? [])
+    const asc = data ? episodeRange(data) : []
     const ordered = newestFirst ? [...asc].reverse() : asc
-    const f = filter.trim().toLowerCase()
-    return f ? ordered.filter((e) => shortEpisodeLabel(e.title).toLowerCase().includes(f)) : ordered
+    const f = filter.trim()
+    return f ? ordered.filter((n) => String(n).includes(f)) : ordered
   }, [data, newestFirst, filter])
 
   const fallbackSeo = (
     <Seo
-      title={pageTitle(`Nonton ${titleFromSlug(animeId)} Sub Indo`)}
+      title={pageTitle(`Nonton ${titleFromSlug(slug)} Sub Indo`)}
       description={DEFAULT_DESCRIPTION}
-      path={`/anime/${animeId}`}
+      path={`/anime/${key}`}
       noindex={error instanceof ApiError && error.status === 404}
     />
   )
@@ -80,28 +82,30 @@ export default function AnimePage() {
       </div>
     )
 
-  const firstEpisode = sortEpisodesAsc(data.episodeList)[0]
-  const lastWatched = library.history.find((h) => h.animeId === animeId)
-  const target = lastWatched?.episodeId ?? firstEpisode?.episodeId
-  const saved = isInWatchlist(animeId)
+  const all = episodeRange(data)
+  const lastWatched = library.history.find((h) => h.animeId === animeKey(data))
+  const target = lastWatched ? `/nonton/${lastWatched.episodeId}` : all.length ? episodePath(data, all[0]) : null
+  const saved = isInWatchlist(animeKey(data))
   const synopsis = data.synopsis.paragraphList.filter(Boolean)
-  const finished = /complete|tamat/i.test(data.status)
+  const genres = [...data.genreList, ...data.themeList, ...data.demographicList]
   const infoRows: [string, string | undefined][] = [
-    ['Judul Jepang', data.japanese],
-    ['Tipe', data.type],
-    ['Status', data.status],
+    ['Judul lain', data.alternativeTitle],
+    ['Tipe', data.type.title],
+    ['Status', data.status.title],
     ['Episode', data.episodes],
     ['Durasi', data.duration],
     ['Tayang', data.aired],
-    ['Musim', al ? (seasonLabel(al) ?? undefined) : undefined],
-    ['Studio', data.studios || al?.studios.nodes.map((s) => s.name).join(', ')],
-    ['Produser', data.producers],
+    ['Musim', data.season.title || (al ? (seasonLabel(al) ?? undefined) : undefined)],
+    ['Studio', data.studioList.map((s) => s.title).join(', ') || al?.studios.nodes.map((s) => s.name).join(', ')],
+    ['Sumber', data.source.title],
+    ['Rating', data.rating],
+    ['Kualitas', data.quality.title],
   ]
   const info = infoRows.filter((row): row is [string, string] => Boolean(row[1]))
 
   return (
     <div className="space-y-4">
-      <Seo {...animeMeta(SITE_URL, animeId, data)} />
+      <Seo {...animeMeta(SITE_URL, key, animeLikeFromKuramanime(data))} />
       <BackButton />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -112,17 +116,21 @@ export default function AnimePage() {
               <Poster src={data.poster} alt={data.title} className="aspect-[3/4] w-28 rounded-[14px] sm:w-36" />
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl font-bold leading-snug text-ink sm:text-2xl">{data.title}</h1>
-                {data.japanese ? <p className="mt-0.5 line-clamp-1 text-sm text-ink-muted">{data.japanese}</p> : null}
+                {data.alternativeTitle ? (
+                  <p className="mt-0.5 line-clamp-2 text-sm text-ink-muted">{data.alternativeTitle}</p>
+                ) : null}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {data.status ? <Pill tone={finished ? 'success' : 'primary'}>{data.status}</Pill> : null}
-                  {data.type ? <Pill tone="neutral">{data.type}</Pill> : null}
+                  {data.status.title ? (
+                    <Pill tone={isFinished(data.status.title) ? 'success' : 'primary'}>{data.status.title}</Pill>
+                  ) : null}
+                  {data.type.title ? <Pill tone="neutral">{data.type.title}</Pill> : null}
                   <Score score={data.score} className="text-sm" />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {data.genreList.map((g) => (
+                  {genres.map((g) => (
                     <Link
-                      key={g.genreId}
-                      to={`/genre/${g.genreId}`}
+                      key={`${g.propertyType}-${g.propertyId}`}
+                      to={g.propertyType === 'genre' ? `/genre/${g.propertyId}` : `/cari?q=${encodeURIComponent(g.title)}`}
                       className="text-[13px] font-medium text-primary-500 hover:underline"
                     >
                       #{g.title.replace(/\s+/g, '')}
@@ -134,7 +142,7 @@ export default function AnimePage() {
             <div className="mt-4 flex gap-3">
               {target ? (
                 <Link
-                  to={`/nonton/${target}`}
+                  to={target}
                   className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary-500 px-5 py-3 text-[15px] font-semibold text-on-primary active:opacity-80"
                 >
                   <Play className="size-4 fill-on-primary" />
@@ -142,7 +150,7 @@ export default function AnimePage() {
                 </Link>
               ) : null}
               <button
-                onClick={() => toggleWatchlist({ animeId, title: data.title, poster: data.poster })}
+                onClick={() => toggleWatchlist({ animeId: animeKey(data), title: data.title, poster: data.poster })}
                 className={cn(
                   'flex items-center justify-center gap-2 rounded-full px-5 py-3 text-[15px] font-semibold active:opacity-80',
                   saved ? 'bg-success-50 text-success-600' : 'bg-primary-50 text-primary-600',
@@ -170,14 +178,14 @@ export default function AnimePage() {
             </CardSection>
           ) : null}
 
-          <AnimeFactCard titles={[data.title, al?.title.romaji, al?.title.english]} />
+          <AnimeFactCard titles={[data.title, data.alternativeTitle, al?.title.romaji, al?.title.english]} />
 
           {al ? <Trailer media={al} title={data.title} /> : null}
 
           <Card className="p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-ink sm:text-xl">
-                Episode <span className="font-medium text-ink-muted">({data.episodeList.length})</span>
+                Episode <span className="font-medium text-ink-muted">({all.length})</span>
               </h2>
               <button
                 onClick={() => setNewestFirst((v) => !v)}
@@ -186,7 +194,7 @@ export default function AnimePage() {
                 <ArrowDownUp className="size-3.5" /> {newestFirst ? 'Terbaru' : 'Terlama'}
               </button>
             </div>
-            {data.episodeList.length > 12 ? (
+            {all.length > 12 ? (
               <div className="relative mb-3">
                 <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink-faint" />
                 <input
@@ -202,25 +210,27 @@ export default function AnimePage() {
               <p className="py-4 text-center text-sm text-ink-muted">Belum ada episode.</p>
             ) : (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-                {episodes.map((e) => {
-                  const watched = library.watched.includes(e.episodeId)
+                {episodes.map((n) => {
+                  const watched = library.watched.includes(episodeKey(data, n))
                   return (
                     <Link
-                      key={e.episodeId}
-                      to={`/nonton/${e.episodeId}`}
-                      title={e.title}
+                      key={n}
+                      to={episodePath(data, n)}
                       className={cn(
                         'flex items-center justify-center gap-1 rounded-xl px-2 py-2.5 text-sm font-semibold active:opacity-70',
                         watched ? 'bg-success-50 text-success-600' : 'bg-subtle text-ink hover:bg-tile',
                       )}
                     >
                       {watched ? <Check className="size-3.5" /> : null}
-                      <span className="truncate">{shortEpisodeLabel(e.title).replace('Episode ', 'Ep ')}</span>
+                      Ep {n}
                     </Link>
                   )
                 })}
               </div>
             )}
+            {data.batchList.length > 0 ? (
+              <p className="mt-3 text-xs text-ink-muted">Tersedia juga versi batch (download semua episode) di sumber aslinya.</p>
+            ) : null}
           </Card>
 
           {al ? <Characters media={al} /> : null}
@@ -243,13 +253,13 @@ export default function AnimePage() {
         </div>
       </div>
 
-      {data.recommendedAnimeList.length > 0 ? (
+      {data.similarAnimeList.length > 0 ? (
         <CardSection title="Mirip Sama Ini">
-          <CardGrid>
-            {data.recommendedAnimeList.slice(0, 12).map((a) => (
-              <AnimeCard key={a.animeId} animeId={a.animeId} title={a.title} poster={a.poster} />
+          <div>
+            {data.similarAnimeList.slice(0, 10).map((a, i, arr) => (
+              <ListRow key={animeKey(a)} to={animePath(a)} title={a.title} isLast={i === arr.length - 1} />
             ))}
-          </CardGrid>
+          </div>
         </CardSection>
       ) : null}
     </div>

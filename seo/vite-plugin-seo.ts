@@ -23,6 +23,7 @@ const STATIC_ROUTES = [
   { path: '/ongoing', changefreq: 'daily', priority: '0.9' },
   { path: '/tamat', changefreq: 'weekly', priority: '0.7' },
   { path: '/genre', changefreq: 'monthly', priority: '0.6' },
+  { path: '/film', changefreq: 'weekly', priority: '0.7' },
   { path: '/daftar', changefreq: 'weekly', priority: '0.6' },
   { path: '/cari-gambar', changefreq: 'monthly', priority: '0.5' },
 ]
@@ -46,20 +47,22 @@ async function collectUrls(apiUrl: string | undefined, log: (msg: string) => voi
     log('API_URL kosong, sitemap cuma berisi halaman utama.')
     return urls
   }
-  const base = `${apiUrl.replace(/\/+$/, '')}/otakudesu`
-  const [genres, all] = await Promise.all([
-    getJson<{ genreList: { genreId: string }[] }>(`${base}/genre`),
-    getJson<{ list: { animeList: { animeId: string }[] }[] }>(`${base}/anime`),
+  const base = `${apiUrl.replace(/\/+$/, '')}/kuramanime`
+  // anime populer 15 halaman pertama (±300 anime) + semua genre
+  const pages = Array.from({ length: 15 }, (_, i) => i + 1)
+  const [genres, ...lists] = await Promise.all([
+    getJson<{ propertyList: { propertyId: string }[] }>(`${base}/properties/genre`),
+    ...pages.map((p) => getJson<{ animeList?: { animeId: string; animeSlug: string }[] }>(`${base}/anime?sort=popular&page=${p}`)),
   ])
-  for (const g of genres?.genreList ?? []) {
-    urls.push({ path: `/genre/${g.genreId}`, changefreq: 'weekly', priority: '0.5' })
+  for (const g of genres?.propertyList ?? []) {
+    urls.push({ path: `/genre/${g.propertyId}`, changefreq: 'weekly', priority: '0.5' })
   }
-  const animeIds = new Set((all?.list ?? []).flatMap((group) => group.animeList.map((a) => a.animeId)))
-  for (const id of animeIds) {
-    urls.push({ path: `/anime/${id}`, changefreq: 'weekly', priority: '0.8' })
+  const animePaths = new Set(lists.flatMap((l) => (l?.animeList ?? []).map((a) => `/anime/${a.animeId}/${a.animeSlug}`)))
+  for (const path of animePaths) {
+    urls.push({ path, changefreq: 'weekly', priority: '0.8' })
   }
-  if (!genres && !all) log(`Gagal ambil data dari ${apiUrl}, sitemap cuma berisi halaman utama.`)
-  else log(`sitemap: ${animeIds.size} anime, ${genres?.genreList.length ?? 0} genre.`)
+  if (!genres && animePaths.size === 0) log(`Gagal ambil data dari ${apiUrl}, sitemap cuma berisi halaman utama.`)
+  else log(`sitemap: ${animePaths.size} anime, ${genres?.propertyList.length ?? 0} genre.`)
   return urls
 }
 

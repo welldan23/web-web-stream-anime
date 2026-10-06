@@ -1,8 +1,11 @@
-// Client buat wajik-anime-api (sumber: otakudesu).
-// Bentuk datanya ngikutin src/interfaces/otakudesu.interface.ts di repo API-nya.
+// Client buat wajik-anime-api (sumber: Kuramanime).
+// Bentuk datanya ngikutin src/interfaces/kuramanime.interface.ts di repo API-nya.
+//
+// Di Kuramanime, satu anime dikenali pakai 2 bagian: animeId (angka) + animeSlug,
+// jadi alamat halamannya /anime/:animeId/:animeSlug dan /nonton/:animeId/:animeSlug/:episode.
 
 const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '')
-const SOURCE = 'otakudesu'
+const SOURCE = 'kuramanime'
 
 export interface Pagination {
   currentPage: number | null
@@ -21,118 +24,100 @@ interface Payload<T> {
   pagination: Pagination | null
 }
 
-export interface Genre {
-  title: string
-  genreId: string
-}
-
-export interface EpisodeRef {
-  title: string
-  episodeId: string
-}
-
 export interface AnimeRef {
   title: string
   animeId: string
+  animeSlug: string
 }
 
-export interface OngoingAnime extends AnimeRef {
+export interface AnimeCard extends AnimeRef {
   poster: string
+  type: string
+  quality: string
+  /** Teks kecil di poster, mis. "Ep 12 / 24" atau skor. */
+  highlight: string
+}
+
+export interface EpisodeCard extends AnimeRef {
+  episodeId: string
+  poster: string
+  type: string
+  quality: string
   episodes: string
-  releaseDay: string
-  latestReleaseDate: string
+  totalEpisodes: string
 }
 
-export interface CompletedAnime extends AnimeRef {
+export interface ScheduledCard extends AnimeRef {
   poster: string
-  episodes: string
-  score: string
-  lastReleaseDate: string
+  type: string
+  quality: string
+  day: string
+  releaseTime: string
 }
 
-export interface SearchedAnime extends AnimeRef {
-  poster: string
-  status: string
-  score: string
-  genreList: Genre[]
-}
-
-export interface GenreAnime extends AnimeRef {
-  poster: string
-  studios: string
-  score: string
-  episodes: string
-  season: string
-  synopsis: { paragraphList: string[] }
-  genreList: Genre[]
+export interface Property {
+  title: string
+  propertyId: string
+  propertyType?: string
 }
 
 export interface Home {
-  ongoing: { animeList: OngoingAnime[] }
-  completed: { animeList: CompletedAnime[] }
+  ongoing: { episodeList: EpisodeCard[] }
+  completed: { animeList: AnimeCard[] }
+  movie: { animeList: AnimeCard[] }
 }
 
-export interface ScheduleDay {
-  title: string
-  animeList: AnimeRef[]
-}
-
-export interface AnimeCollection {
-  startWith: string
-  animeList: AnimeRef[]
-}
-
-export interface AnimeDetails {
-  title: string
-  japanese: string
-  score: string
-  producers: string
-  type: string
-  status: string
-  episodes: string
-  duration: string
-  aired: string
-  studios: string
+export interface AnimeDetails extends AnimeRef {
+  alternativeTitle: string
   poster: string
   synopsis: { paragraphList: string[] }
-  batch: { title: string; batchId: string } | null
-  genreList: Genre[]
-  episodeList: EpisodeRef[]
-  recommendedAnimeList: (AnimeRef & { poster: string })[]
+  episode: { first: number | null; last: number | null }
+  episodes: string
+  aired: string
+  duration: string
+  explicit: string
+  score: string
+  fans: string
+  rating: string
+  credit: string
+  type: Property
+  status: Property
+  season: Property
+  quality: Property
+  country: Property
+  source: Property
+  genreList: Property[]
+  themeList: Property[]
+  demographicList: Property[]
+  studioList: Property[]
+  batchList: (AnimeRef & { batchId: string })[]
+  similarAnimeList: AnimeRef[]
 }
 
-export interface Server {
-  title: string
-  serverId: string
-}
-
-export interface Quality {
+export interface VideoQuality {
   title: string
   size?: string
   urlList?: { title: string; url: string }[]
-  serverList?: Server[]
 }
 
 export interface EpisodeDetails {
+  /** Judul anime. */
   title: string
+  /** Judul episode, mis. "Episode 5". */
+  episodeTitle: string
   animeId: string
-  releaseTime: string
-  defaultStreamingUrl: string
+  animeSlug: string
+  lastUpdated: string
   hasPrevEpisode: boolean
-  prevEpisode: EpisodeRef | null
+  prevEpisode: { episodeId: string } | null
   hasNextEpisode: boolean
-  nextEpisode: EpisodeRef | null
-  server: { qualityList: Quality[] }
-  download: { qualityList: Quality[] }
-  info: {
-    credit: string
-    encoder: string
-    duration: string
-    type: string
-    genreList: Genre[]
-    episodeList: EpisodeRef[]
-  }
+  nextEpisode: { episodeId: string } | null
+  server: { qualityList: VideoQuality[] }
+  download: { qualityList: VideoQuality[] }
 }
+
+export type SortKey = 'popular' | 'latest' | 'updated' | 'a-z' | 'z-a' | 'most_viewed' | 'oldest'
+export type ScheduleDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday' | 'all'
 
 export class ApiError extends Error {
   status: number
@@ -144,13 +129,8 @@ export class ApiError extends Error {
 
 type Params = Record<string, string | number | undefined>
 
-/** Ambil data dari salah satu sumber wajik-anime-api (otakudesu, kuramanime, ...). */
-export async function getFrom<T>(
-  source: string,
-  path: string,
-  params?: Params,
-  init?: RequestInit,
-) {
+/** Ambil data dari salah satu sumber wajik-anime-api. */
+export async function getFrom<T>(source: string, path: string, params?: Params, init?: RequestInit) {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value !== undefined && value !== '') query.set(key, String(value))
@@ -173,24 +153,44 @@ export async function getFrom<T>(
   return { data: body.data, pagination: body.pagination }
 }
 
-function get<T>(path: string, params?: Params) {
-  return getFrom<T>(SOURCE, path, params)
+function get<T>(path: string, params?: Params, init?: RequestInit) {
+  return getFrom<T>(SOURCE, path, params, init)
 }
+
+const seg = encodeURIComponent
 
 export const api = {
   home: () => get<Home>('/home').then((r) => r.data),
-  schedule: () => get<{ scheduleList: ScheduleDay[] }>('/schedule').then((r) => r.data.scheduleList),
-  allAnime: () => get<{ list: AnimeCollection[] }>('/anime').then((r) => r.data.list),
-  genres: () => get<{ genreList: Genre[] }>('/genre').then((r) => r.data.genreList),
-  ongoing: (page: number) => get<{ animeList: OngoingAnime[] }>('/ongoing', { page }),
-  completed: (page: number) => get<{ animeList: CompletedAnime[] }>('/completed', { page }),
-  search: (q: string) => get<{ animeList: SearchedAnime[] }>('/search', { q }).then((r) => r.data.animeList),
-  byGenre: (genreId: string, page: number) =>
-    get<{ animeList: GenreAnime[] }>(`/genre/${encodeURIComponent(genreId)}`, { page }),
-  anime: (animeId: string) =>
-    get<{ details: AnimeDetails }>(`/anime/${encodeURIComponent(animeId)}`).then((r) => r.data.details),
-  episode: (episodeId: string) =>
-    get<{ details: EpisodeDetails }>(`/episode/${encodeURIComponent(episodeId)}`).then((r) => r.data.details),
-  server: (serverId: string) =>
-    get<{ details: { url: string } }>(`/server/${encodeURIComponent(serverId)}`).then((r) => r.data.details.url),
+  /** Daftar anime: cari, filter status (ongoing/completed/movie), urutan, halaman. */
+  animes: (opts: { search?: string; status?: 'ongoing' | 'completed' | 'movie'; sort?: SortKey; page?: number }) =>
+    get<{ animeList?: AnimeCard[]; episodeList?: EpisodeCard[] }>('/anime', opts),
+  schedule: (day: ScheduleDay, page = 1) =>
+    get<{ animeList: ScheduledCard[] }>('/schedule', { day, page }),
+  properties: (type: 'genre' | 'season' | 'studio' | 'type') =>
+    get<{ propertyList: Property[] }>(`/properties/${type}`).then((r) => r.data.propertyList),
+  byProperty: (type: string, id: string, opts: { sort?: SortKey; page?: number }) =>
+    get<{ animeList: AnimeCard[] }>(`/properties/${seg(type)}/${seg(id)}`, opts),
+  anime: (animeId: string, slug: string) =>
+    get<{ details: AnimeDetails }>(`/anime/${seg(animeId)}/${seg(slug)}`).then((r) => r.data.details),
+  episode: (animeId: string, slug: string, episode: string | number) =>
+    get<{ details: EpisodeDetails }>(`/episode/${seg(animeId)}/${seg(slug)}/${seg(String(episode))}`).then(
+      (r) => r.data.details,
+    ),
+}
+
+// ---------- Alamat halaman ----------
+
+/** Kunci unik satu anime: "123/one-piece" (dipakai di koleksi, riwayat, cache). */
+export const animeKey = (a: Pick<AnimeRef, 'animeId' | 'animeSlug'>) => `${a.animeId}/${a.animeSlug}`
+export const animePath = (a: Pick<AnimeRef, 'animeId' | 'animeSlug'>) => `/anime/${animeKey(a)}`
+export const episodeKey = (a: Pick<AnimeRef, 'animeId' | 'animeSlug'>, episode: string | number) =>
+  `${animeKey(a)}/${episode}`
+export const episodePath = (a: Pick<AnimeRef, 'animeId' | 'animeSlug'>, episode: string | number) =>
+  `/nonton/${episodeKey(a, episode)}`
+
+/** Daftar nomor episode dari info "episode pertama & terakhir". */
+export function episodeRange(details: Pick<AnimeDetails, 'episode'>) {
+  const first = details.episode.first ?? 1
+  const last = Math.max(first, details.episode.last ?? first)
+  return Array.from({ length: last - first + 1 }, (_, i) => first + i)
 }

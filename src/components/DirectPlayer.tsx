@@ -3,7 +3,7 @@
 // - ganti kualitas tanpa balik ke awal
 // - kalau video gagal dimuat (link mati / ditolak), panggil onFail biar halaman pindah ke server lain
 import { useRef } from 'react'
-import { getPosition, savePosition, type DirectSource } from '../lib/kuramanime'
+import { getPosition, savePosition, type DirectSource } from '../lib/player'
 
 export default function DirectPlayer({
   episodeId,

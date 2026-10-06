@@ -55,7 +55,7 @@ export function WatchlistPage() {
           <CardGrid>
             {watchlist.map((a) => (
               <div key={a.animeId} className="relative">
-                <AnimeCard animeId={a.animeId} title={a.title} poster={a.poster} />
+                <AnimeCard to={`/anime/${a.animeId}`} title={a.title} poster={a.poster} />
                 <button
                   onClick={() => toggleWatchlist(a)}
                   className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-full bg-surface text-ink shadow-card active:opacity-70"

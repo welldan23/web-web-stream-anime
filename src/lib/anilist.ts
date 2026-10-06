@@ -79,7 +79,7 @@ query ($id: Int!) {
   }
 }`
 
-// ---------- Nyocokin judul otakudesu ke AniList ----------
+// ---------- Nyocokin judul anime ke AniList ----------
 
 /** "Kimetsu no Yaiba Season 3 (Episode 01 – 11) Subtitle Indonesia" -> "Kimetsu no Yaiba Season 3" */
 export function cleanTitle(title: string) {
@@ -152,7 +152,7 @@ const MIN_SCORE = 0.6
 
 /**
  * Pilih item yang judulnya paling mirip sama salah satu `names` (nomor season harus sama).
- * Dipakai buat nyocokin judul antar sumber (AniList, trace.moe, otakudesu, kuramanime).
+ * Dipakai buat nyocokin judul antar sumber (AniList, trace.moe, Kuramanime).
  */
 export function bestTitleMatch<T>(items: T[], getTitle: (item: T) => string, names: string[], min = MIN_SCORE) {
   const wanted = Math.max(1, ...names.map((n) => seasonNumber(n) ?? 1))
@@ -175,7 +175,7 @@ export function pickBest(candidates: AniListCandidate[], title: string, japanese
   return best && best.score >= MIN_SCORE ? best.c : null
 }
 
-// simpan hasil cocok (animeId otakudesu -> id AniList) biar kunjungan berikutnya nggak nyari lagi
+// simpan hasil cocok ("123/slug" Kuramanime -> id AniList) biar kunjungan berikutnya nggak nyari lagi
 const MAP_KEY = 'animeku:anilist-map'
 function readMap(): Record<string, number | 0> {
   try {
@@ -194,7 +194,7 @@ function remember(animeId: string, anilistId: number | 0) {
   }
 }
 
-/** Cari data AniList buat satu anime otakudesu. `null` kalau nggak ketemu yang cukup mirip. */
+/** Cari data AniList buat satu anime. `null` kalau nggak ketemu yang cukup mirip. */
 export async function findAniList(animeId: string, title: string, japanese?: string): Promise<AniListMedia | null> {
   let id = readMap()[animeId]
   if (id === 0) return null
