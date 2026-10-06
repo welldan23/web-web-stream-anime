@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Proyek Android dibikin ulang otomatis di GitHub Actions (npx cap add android)
+/android/

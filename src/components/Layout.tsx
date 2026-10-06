@@ -64,7 +64,7 @@ export default function Layout() {
     <div className="relative min-h-dvh bg-brand-300">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-gradient-to-br from-brand-500 via-brand-400 to-brand-300" />
 
-      <header className="relative mx-auto flex max-w-5xl items-center gap-3 px-4 pb-4 pt-3 sm:gap-5 sm:pt-4">
+      <header className="relative mx-auto flex max-w-5xl items-center gap-3 px-4 pb-4 pt-[calc(var(--safe-top)+0.75rem)] sm:gap-5 sm:pt-[calc(var(--safe-top)+1rem)]">
         <Link to="/" className="hidden shrink-0 text-xl font-bold tracking-tight text-ink sm:block">
           Animeku
         </Link>
@@ -89,7 +89,7 @@ export default function Layout() {
         </div>
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[var(--safe-bottom)] md:hidden">
         <div className="grid grid-cols-4">
           {bottomNav.map(({ to, label, icon: Icon, match }) => (
             <NavLink

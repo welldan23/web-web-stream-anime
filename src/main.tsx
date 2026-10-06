@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { ApiError } from './lib/api'
 import './index.css'
+import { initNative } from './lib/native'
 
 // Hapus meta tag bawaan dari index.html; gantinya dirender komponen <Seo> per halaman
 document.head.querySelectorAll('[data-seo]').forEach((el) => el.remove())
@@ -29,3 +30,5 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 )
+
+initNative()

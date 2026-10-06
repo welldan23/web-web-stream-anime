@@ -6,6 +6,11 @@
  * sama kayak MyWallet (wallet-custodial), cuma nilainya yang diganti.
  */
 :root {
+  /* jarak aman status bar / gesture bar HP. Di aplikasi Android, Capacitor
+     ngisi --safe-area-inset-*; di browser pakai env() bawaan. */
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+
   /* header */
   --c-brand-300: #2a1e17;
   --c-brand-400: #3d2b20;

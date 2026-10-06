@@ -108,6 +108,29 @@ curl http://localhost:4173/sitemap.xml
 
 Setelah online, daftarin web kamu di **Google Search Console** terus kirim `https://web-kamu/sitemap.xml` biar cepat diindeks.
 
+## Aplikasi Android (APK)
+
+Animeku juga bisa dipasang di HP Android sebagai aplikasi. Isinya web yang sama, dibungkus pakai [Capacitor](https://capacitorjs.com). APK-nya dibuat otomatis oleh **GitHub Actions** tiap ada push ke `master`, jadi kamu nggak perlu install Android Studio.
+
+**Cara pasang:**
+
+1. Buka halaman **Releases** repo ini, cari rilis **apk-latest**, terus download `animeku.apk`. File yang sama juga ada di tab **Actions** (bagian Artifacts).
+2. Buka file-nya di HP. Kalau muncul peringatan, izinkan **"Install dari sumber tidak dikenal"**.
+3. Selesai. Ikon Animeku bakal muncul di menu HP.
+
+Beberapa hal yang perlu kamu tahu:
+
+- **Nggak ada di Play Store.** APK ini dipasang manual (sideload), jadi wajar kalau Play Protect ngasih peringatan.
+- **Data diambil dari server wajik-anime-api kamu.** Defaultnya `https://srv1977175.hstgr.cloud/api`. Kalau mau ganti, isi variable `ANIMEKU_API_URL` (dan `ANIMEKU_SITE_URL`) di **Settings → Secrets and variables → Actions → Variables**. Server-nya harus **HTTPS**.
+- **Update tanpa uninstall:** APK ini ditandatangani pakai kunci debug yang dibuat acak tiap build. Akibatnya, versi baru bisa ditolak kalau dipasang di atas versi lama ("aplikasi tidak terpasang"). Biar kuncinya selalu sama, bikin sekali:
+  ```bash
+  keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey \
+    -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+  base64 -w0 debug.keystore   # salin hasilnya
+  ```
+  Terus simpan hasilnya sebagai secret `ANDROID_DEBUG_KEYSTORE`. Setelah itu, uninstall versi lama sekali aja. Build-build selanjutnya bisa langsung ditimpa.
+- Kalau mau build sendiri di laptop yang ada Android Studio-nya: `npm run android:sync`, terus buka folder `android/`. Folder itu dibuat dulu pakai `npx cap add android`, dan `native/android/MainActivity.java` disalin ke dalamnya.
+
 ## Struktur Folder
 
 ```
@@ -118,6 +141,8 @@ src/
 api/meta.ts       # fungsi Vercel: suntik meta tag SEO ke halaman anime & episode
 seo/render.ts     # logika suntik meta tag (dipakai Vercel & localhost)
 seo/              # plugin Vite: sitemap.xml, robots.txt, preconnect, meta tag di dev/preview
+capacitor.config.ts, assets/, native/   # aplikasi Android: config, ikon & splash, MainActivity
+.github/workflows/android.yml           # build APK otomatis
 ```
 
 ## Catatan

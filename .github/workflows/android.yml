@@ -1,0 +1,94 @@
+# Bikin APK Android Animeku (Capacitor) tiap ada push ke master.
+# Hasilnya: tab Actions (artifact) + halaman Releases (tag `apk-latest`).
+#
+# Atur lewat Settings → Secrets and variables → Actions:
+#   - variable ANIMEKU_API_URL  : alamat wajik-anime-api (default: server hstgr)
+#   - variable ANIMEKU_SITE_URL : alamat web Animeku (buat link share/SEO)
+#   - secret ANDROID_DEBUG_KEYSTORE (opsional, base64 dari debug.keystore):
+#     biar tanda tangan APK selalu sama, jadi update bisa langsung ditimpa
+#     tanpa uninstall dulu.
+name: Android APK
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_URL: ${{ vars.ANIMEKU_API_URL || 'https://srv1977175.hstgr.cloud/api' }}
+      VITE_SITE_URL: ${{ vars.ANIMEKU_SITE_URL || 'https://srv1977175.hstgr.cloud' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build web
+        run: npm run build
+
+      - name: Siapin project Android
+        run: |
+          npx cap add android
+          npx --yes @capacitor/assets@3 generate --android \
+            --iconBackgroundColor '#3d2b20' --iconBackgroundColorDark '#3d2b20' \
+            --splashBackgroundColor '#120e0b' --splashBackgroundColorDark '#120e0b'
+          npx cap sync android
+          cp native/android/MainActivity.java android/app/src/main/java/id/animeku/app/MainActivity.java
+          # nomor versi naik tiap build, biar Android mau nimpa versi lama
+          sed -i -E "s/versionCode [0-9]+/versionCode ${GITHUB_RUN_NUMBER}/; s/versionName \"[^\"]*\"/versionName \"1.0.${GITHUB_RUN_NUMBER}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      - name: Pasang keystore tetap (kalau ada)
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "Secret ANDROID_DEBUG_KEYSTORE belum diisi, pakai keystore acak."
+            exit 0
+          fi
+          mkdir -p ~/.android
+          echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../animeku.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: animeku-apk
+          path: animeku.apk
+
+      - name: Terbitkan ke Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-latest --cleanup-tag --yes || true
+          gh release create apk-latest animeku.apk \
+            --target "$GITHUB_SHA" \
+            --title "Animeku APK (build ${GITHUB_RUN_NUMBER})" \
+            --notes "APK terbaru dari commit ${GITHUB_SHA::7}. Download animeku.apk di bawah, buka di HP, lalu izinkan install dari sumber tidak dikenal."
