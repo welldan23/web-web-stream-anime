@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, ExternalLink, Loader2 } from 'lucide-react'
-import { api, type Server } from '../lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, ChevronDown, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
+import { api } from '../lib/api'
+import {
+  autoCandidates,
+  flattenServers,
+  PLAYER_SANDBOX,
+  readBlockPopups,
+  rememberServer,
+  saveBlockPopups,
+  serverLabel,
+  sortForDisplay,
+  type ServerOption,
+} from '../lib/servers'
 import { recordWatch, useLibrary } from '../lib/library'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { cn } from '../lib/cn'
@@ -19,8 +30,9 @@ function GroupTitle({ children }: { children: React.ReactNode }) {
 export default function WatchPage() {
   const { episodeId = '' } = useParams()
   const library = useLibrary()
-  // server yang dipilih user, diikat ke episode-nya biar otomatis balik ke default pas ganti episode
-  const [picked, setPicked] = useState<{ episodeId: string; serverId: string; url?: string } | null>(null)
+  // server yang dipilih manual, diikat ke episode-nya; 'default' = player bawaan otakudesu
+  const [picked, setPicked] = useState<{ episodeId: string; serverId: string } | null>(null)
+  const [blockPopups, setBlockPopups] = useState(readBlockPopups)
   const activeEpisodeRef = useRef<HTMLAnchorElement>(null)
 
   const episode = useQuery({ queryKey: ['episode', episodeId], queryFn: () => api.episode(episodeId) })
@@ -31,24 +43,57 @@ export default function WatchPage() {
     enabled: Boolean(animeId),
   })
 
-  const server = useMutation({
-    mutationFn: async (v: { episodeId: string; server: Server }) => api.server(v.server.serverId),
-    onSuccess: (url, v) =>
-      setPicked((p) => (p && p.episodeId === v.episodeId && p.serverId === v.server.serverId ? { ...p, url } : p)),
+  const ep = episode.data
+  const options = useMemo(() => flattenServers(ep?.server.qualityList ?? []), [ep])
+  const candidates = useMemo(() => autoCandidates(options), [options])
+  const manual = picked?.episodeId === episodeId ? picked.serverId : null
+
+  // Otomatis: coba server andalan satu per satu sampai ada yang ngasih link
+  const auto = useQuery({
+    queryKey: ['server-auto', episodeId, candidates.map((c) => c.serverId)],
+    queryFn: async () => {
+      for (const c of candidates) {
+        const url = await api.server(c.serverId).catch(() => null)
+        if (url) return { serverId: c.serverId, url }
+      }
+      return null
+    },
+    enabled: Boolean(ep) && !manual && candidates.length > 0,
+    staleTime: 1000 * 60 * 30,
+    retry: false,
   })
-  const choice = picked?.episodeId === episodeId ? picked : null
-  const activeServer = choice?.serverId ?? null
-  const streamUrl = choice?.url ?? null
-  const serverPending = server.isPending && server.variables?.episodeId === episodeId
-  const serverError = server.isError && server.variables?.episodeId === episodeId && Boolean(choice) && !choice?.url
-  const pickServer = (s: Server | null) => {
-    if (!s) return setPicked(null)
-    setPicked({ episodeId, serverId: s.serverId })
-    server.mutate({ episodeId, server: s })
+
+  // Manual: user milih server sendiri
+  const chosen = useQuery({
+    queryKey: ['server', manual],
+    queryFn: () => api.server(manual!),
+    enabled: Boolean(manual) && manual !== 'default',
+    staleTime: 1000 * 60 * 30,
+    retry: false,
+  })
+
+  const pickServer = (o: ServerOption | 'default') => {
+    if (o !== 'default') rememberServer(o)
+    setPicked({ episodeId, serverId: o === 'default' ? 'default' : o.serverId })
   }
 
+  const usingAuto = !manual && candidates.length > 0
+  const activeServer = manual ?? (usingAuto ? (auto.data?.serverId ?? (auto.data === null ? 'default' : null)) : 'default')
+  const src = manual
+    ? manual === 'default'
+      ? ep?.defaultStreamingUrl
+      : chosen.data
+    : usingAuto
+      ? auto.data === null
+        ? ep?.defaultStreamingUrl
+        : auto.data?.url
+      : ep?.defaultStreamingUrl
+  const playerLoading =
+    episode.isLoading || (manual ? manual !== 'default' && chosen.isLoading : usingAuto && auto.isLoading)
+  const serverError = manual && manual !== 'default' && chosen.isError
+  const autoFailed = !manual && usingAuto && auto.data === null
+
   // simpan ke riwayat setelah data episode (dan anime, kalau ada) kelar dimuat
-  const ep = episode.data
   const animeSettled = !animeId || anime.isSuccess || anime.isError
   useEffect(() => {
     if (!ep || !animeSettled) return
@@ -93,8 +138,9 @@ export default function WatchPage() {
       </>
     )
 
-  const src = streamUrl ?? ep?.defaultStreamingUrl
-  const qualities = ep?.server.qualityList.filter((q) => q.serverList && q.serverList.length > 0) ?? []
+  const reliable = sortForDisplay(options.filter((o) => o.reliable))
+  const others = options.filter((o) => !o.reliable)
+  const activeOption = options.find((o) => o.serverId === activeServer)
   const downloads = ep?.download.qualityList.filter((q) => q.urlList && q.urlList.length > 0) ?? []
   const epNumber = ep ? episodeNumber(ep.title) : null
 
@@ -116,15 +162,17 @@ export default function WatchPage() {
       <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
         <div className="min-w-0 space-y-4">
           <div className="relative aspect-video overflow-hidden rounded-[20px] bg-black">
-            {episode.isLoading || serverPending ? (
+            {playerLoading ? (
               <div className="absolute inset-0 grid place-items-center">
                 <Loader2 className="size-8 animate-spin text-white/70" />
               </div>
             ) : src ? (
               <iframe
-                key={src}
+                // key ikut status blokir: atribut sandbox cuma kebaca waktu iframe dibuat ulang
+                key={`${src}|${blockPopups}`}
                 src={src}
                 title={ep?.title ?? 'Player'}
+                sandbox={blockPopups ? PLAYER_SANDBOX : undefined}
                 allowFullScreen
                 allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
                 referrerPolicy="no-referrer"
@@ -132,7 +180,7 @@ export default function WatchPage() {
               />
             ) : (
               <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-white/70">
-                Player utama nggak tersedia. Pilih server di bawah.
+                Video nggak tersedia di server ini. Coba server lain di bawah.
               </div>
             )}
           </div>
@@ -156,31 +204,86 @@ export default function WatchPage() {
           </Card>
 
           {serverError ? <Notice tone="danger">Server ini lagi bermasalah. Coba pilih server lain.</Notice> : null}
+          {autoFailed ? (
+            <Notice>Vidhide & Mega lagi nggak bisa buat episode ini, jadi diputar pakai player bawaan.</Notice>
+          ) : null}
 
           <div className="space-y-2">
             <GroupTitle>Server</GroupTitle>
             <Card className="px-4">
-              <div className="flex flex-wrap items-center gap-2 border-b border-line py-3">
-                <span className="w-12 text-sm font-semibold text-ink-muted">Utama</span>
-                <Chip size="sm" active={activeServer === null} onClick={() => pickServer(null)}>
-                  Default
-                </Chip>
-              </div>
-              {qualities.map((q, i) => (
-                <div
-                  key={q.title}
-                  className={cn('flex flex-wrap items-center gap-2 py-3', i < qualities.length - 1 && 'border-b border-line')}
-                >
-                  <span className="w-12 text-sm font-semibold text-ink-muted">{q.title}</span>
-                  {q.serverList!.map((s) => (
-                    <Chip size="sm" key={s.serverId} active={activeServer === s.serverId} onClick={() => pickServer(s)}>
-                      {s.title}
+              {reliable.length > 0 ? (
+                <div className="py-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+                    <span className="size-2 rounded-full bg-success-500" /> Lancar
+                    {activeOption ? (
+                      <span className="font-normal text-ink-muted">· lagi diputar: {serverLabel(activeOption)}</span>
+                    ) : null}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {reliable.map((o) => (
+                      <Chip size="sm" key={o.serverId} active={activeServer === o.serverId} onClick={() => pickServer(o)}>
+                        {serverLabel(o)}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <details className={cn('group py-3', reliable.length > 0 && 'border-t border-line')} open={reliable.length === 0}>
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-ink-muted">
+                  Server lain
+                  <span className="font-normal">· sering error</span>
+                  <ChevronDown className="ml-auto size-4 transition group-open:rotate-180" />
+                </summary>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Chip size="sm" active={activeServer === 'default'} onClick={() => pickServer('default')}>
+                    Player bawaan
+                  </Chip>
+                  {others.map((o) => (
+                    <Chip size="sm" key={o.serverId} active={activeServer === o.serverId} onClick={() => pickServer(o)}>
+                      {serverLabel(o)}
                     </Chip>
                   ))}
                 </div>
-              ))}
+              </details>
             </Card>
-            <p className="px-1 text-xs text-ink-muted">Video nggak muncul atau lemot? Coba ganti server.</p>
+            <p className="px-1 text-xs text-ink-muted">
+              Server lancar dipilih otomatis. Pilihan kamu diingat buat episode berikutnya.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <GroupTitle>Iklan</GroupTitle>
+            <Card className="px-4">
+              <label className="flex cursor-pointer items-center gap-3 py-3.5">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-500">
+                  <ShieldCheck className="size-[18px]" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-ink">Blokir pop-up iklan</span>
+                  <span className="block text-xs leading-relaxed text-ink-muted">
+                    Cegah tab iklan kebuka & halaman pindah sendiri pas video diklik. Kalau video nggak mau
+                    muter, matiin ini.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={blockPopups}
+                  onChange={(e) => {
+                    setBlockPopups(e.target.checked)
+                    saveBlockPopups(e.target.checked)
+                  }}
+                  className="peer sr-only"
+                />
+                <span
+                  aria-hidden
+                  className="relative h-7 w-12 shrink-0 rounded-full bg-tile transition peer-checked:bg-primary-500 peer-focus-visible:ring-2 peer-focus-visible:ring-primary-500/50 after:absolute after:left-1 after:top-1 after:size-5 after:rounded-full after:bg-ink-faint after:transition peer-checked:after:translate-x-5 peer-checked:after:bg-on-primary"
+                />
+              </label>
+            </Card>
+            <p className="px-1 text-xs text-ink-muted">
+              Iklan yang tampil di dalam video berasal dari server videonya, jadi nggak bisa dihapus dari sini.
+            </p>
           </div>
 
           {downloads.length > 0 ? (

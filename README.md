@@ -13,7 +13,7 @@ Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wa
 - **Pencarian** anime
 - **Detail anime**: info lengkap, sinopsis, daftar episode (bisa diurutkan & dicari), tanda episode yang udah ditonton, rekomendasi
 - **Data tambahan dari [AniList](https://anilist.co)** di halaman detail: banner HD, skor/popularitas/favorit, hitung mundur episode berikutnya, trailer YouTube, karakter + seiyuu, dan link ke AniList/MyAnimeList. Judul otakudesu dicocokin otomatis ke AniList (`src/lib/anilist.ts`); kalau nggak yakin cocok, bagian ini disembunyiin aja
-- **Halaman nonton**: player, pilih server per kualitas (360p/480p/720p), episode sebelumnya/berikutnya, link download
+- **Halaman nonton**: server lancar (**Vidhide & Mega**) dipilih otomatis, kalau gagal pindah sendiri ke server berikutnya, dan pilihan server/kualitas diingat buat episode selanjutnya (daftar server andalan di `src/lib/servers.ts`). Ada tombol **blokir pop-up iklan** (pakai `sandbox` di iframe) yang nyegah tab iklan kebuka & halaman dibajak; episode sebelumnya/berikutnya, link download
 - **Koleksi** (watchlist) dan **Riwayat** — disimpan di browser (localStorage), nggak perlu login
 - Responsif: menu pil di header, navigasi bawah di HP
 
