@@ -25,7 +25,7 @@ const bottomNav = [home, schedule, search, library]
 /** Menu pil di header: aktif = putih, sisanya transparan. */
 function Pills({ items, pathname, className }: { items: NavItem[]; pathname: string; className?: string }) {
   return (
-    <nav className={cn('flex gap-2', className)}>
+    <nav className={cn('flex min-w-0 gap-2', className)}>
       {items.map(({ to, label, icon: Icon, match }) => {
         const active = match(pathname)
         return (
@@ -38,7 +38,13 @@ function Pills({ items, pathname, className }: { items: NavItem[]; pathname: str
               active ? 'bg-surface text-ink' : 'bg-white/10 text-ink-soft hover:bg-white/15',
             )}
           >
-            <Icon className={cn('size-[17px] shrink-0', active ? 'text-primary-500' : 'text-ink-soft')} />
+            <Icon
+              className={cn(
+                // di layar super kecil (<360px) ikon disembunyiin biar 3 pil muat
+                'hidden size-[17px] shrink-0 min-[360px]:block',
+                active ? 'text-primary-500' : 'text-ink-soft',
+              )}
+            />
             <span className="truncate">{label}</span>
           </Link>
         )

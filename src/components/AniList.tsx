@@ -119,30 +119,30 @@ export function Characters({ media }: { media: AniListMedia }) {
 
   return (
     <CardSection title="Karakter & Pengisi Suara">
-      <div className="grid gap-x-6 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
         {edges.map((e, i) => {
           const va = e.voiceActors[0]
           return (
             <div
               key={e.node.id}
               className={cn(
-                'flex items-center gap-3 py-2.5',
+                'flex min-w-0 items-center gap-2.5 py-2.5',
                 i < edges.length - 1 && 'border-b border-line',
                 i >= lastRowStart && 'sm:border-b-0',
               )}
             >
-              <Poster src={e.node.image.medium ?? undefined} alt={e.node.name.full} className="size-11 rounded-full" />
+              <Poster src={e.node.image.medium ?? undefined} alt={e.node.name.full} className="size-10 rounded-full" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink">{e.node.name.full}</p>
+                <p className="line-clamp-2 text-sm font-semibold leading-snug text-ink">{e.node.name.full}</p>
                 <p className="text-xs text-ink-muted">{ROLE[e.role] ?? e.role}</p>
               </div>
               {va ? (
                 <>
-                  <div className="min-w-0 text-right">
-                    <p className="truncate text-sm text-ink-soft">{va.name.full}</p>
+                  <div className="min-w-0 max-w-[40%] text-right">
+                    <p className="line-clamp-2 text-sm leading-snug text-ink-soft">{va.name.full}</p>
                     <p className="text-xs text-ink-faint">Seiyuu</p>
                   </div>
-                  <Poster src={va.image.medium ?? undefined} alt={va.name.full} className="size-11 rounded-full" />
+                  <Poster src={va.image.medium ?? undefined} alt={va.name.full} className="size-10 rounded-full" />
                 </>
               ) : null}
             </div>
