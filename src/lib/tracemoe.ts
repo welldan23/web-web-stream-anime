@@ -1,8 +1,9 @@
 // Cari anime dari screenshot pakai trace.moe (https://trace.moe).
 // Gratis tanpa API key, tapi ada kuota per IP (±1000 pencarian/bulan) dan
-// batas ukuran gambar 25 MB. Hasilnya dicocokin ke anime di Animeku biar bisa langsung nonton.
-import { api, type CardItem } from './api'
+// batas ukuran gambar 25 MB. Hasilnya dicocokin ke otakudesu biar bisa langsung nonton.
+import { api, type AnimeRef, type SearchedAnime } from './api'
 import { bestTitleMatch, cleanTitle } from './anilist'
+import { episodeNumber } from './episodes'
 
 const TRACE_URL = 'https://api.trace.moe/search'
 
@@ -118,33 +119,31 @@ export function dedupe(results: TraceResult[]) {
   })
 }
 
-// ---------- Cocokin ke Animeku (Oploverz) ----------
+// ---------- Cocokin ke otakudesu ----------
 
-export interface SiteMatch {
-  animeTitle: string
-  animePath: string
+export interface OtakudesuMatch {
+  anime: AnimeRef
   /** null kalau episode-nya nggak ketemu (tetap bisa buka halaman animenya). */
-  episodePath: string | null
+  episodeId: string | null
 }
 
-/** Cari anime yang sama di Animeku (pakai judul romaji/inggris), lalu cari episodenya. */
-export async function findOnSite(r: TraceResult): Promise<SiteMatch | null> {
+/** Cari anime yang sama di otakudesu (pakai judul romaji/inggris), lalu cari episodenya. */
+export async function findOnOtakudesu(r: TraceResult): Promise<OtakudesuMatch | null> {
   const t = r.anilist.title
   const names = [t.romaji, t.english, ...r.anilist.synonyms].filter((x): x is string => Boolean(x))
   const queries = [...new Set([t.romaji, t.english].filter((x): x is string => Boolean(x)).map(cleanTitle))]
 
-  let anime: CardItem | null = null
+  let anime: SearchedAnime | null = null
   for (const q of queries) {
     const list = await api.search(q).catch(() => [])
     anime = bestTitleMatch(list, (a) => a.title, names)
     if (anime) break
   }
-  if (!anime?.animeId) return null
+  if (!anime) return null
 
-  const base = { animeTitle: anime.title, animePath: `/anime/${anime.animeId}` }
   const ep = episodeOf(r)
-  if (ep === null) return { ...base, episodePath: null }
+  if (ep === null) return { anime, episodeId: null }
   const details = await api.anime(anime.animeId).catch(() => null)
-  const match = details?.episodeList.find((e) => e.number === ep)
-  return { ...base, episodePath: match ? `/nonton/${match.episodeId}` : null }
+  const match = details?.episodeList.find((e) => episodeNumber(e.title) === ep)
+  return { anime, episodeId: match?.episodeId ?? null }
 }

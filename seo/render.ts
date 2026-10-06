@@ -2,7 +2,6 @@
 // Dipakai oleh fungsi Vercel (api/meta.ts) DAN oleh `npm run dev` / `npm run preview`
 // (seo/vite-plugin-seo.ts), jadi hasil di localhost sama persis kayak di produksi.
 import {
-  animeLikeFromOploverz,
   animeMeta,
   DEFAULT_DESCRIPTION,
   episodeMeta,
@@ -17,7 +16,7 @@ const SAFE_ID = /^[\w.~-]{1,200}$/
 class NotFound extends Error {}
 
 async function apiGet<T>(api: string, path: string): Promise<T> {
-  const res = await fetch(`${api}/oploverz${path}`, { signal: AbortSignal.timeout(4000) })
+  const res = await fetch(`${api}/otakudesu${path}`, { signal: AbortSignal.timeout(4000) })
   if (res.status === 404) throw new NotFound()
   if (!res.ok) throw new Error(`API ${res.status}`)
   const body = (await res.json()) as { data?: { details?: T } | null }
@@ -25,28 +24,17 @@ async function apiGet<T>(api: string, path: string): Promise<T> {
   return body.data.details
 }
 
-type OploAnime = Parameters<typeof animeLikeFromOploverz>[0]
-interface OploEpisode {
-  title: string
-  seriesSlug: string
-  releasedOn?: string
-}
+type AnimeDetails = Parameters<typeof animeMeta>[2]
+type EpisodeDetails = Parameters<typeof episodeMeta>[2]
 
 async function resolveMeta(api: string, site: string, kind: string, id: string): Promise<PageMeta | null> {
   if (kind === 'anime') {
-    return animeMeta(site, id, animeLikeFromOploverz(await apiGet<OploAnime>(api, `/anime/${encodeURIComponent(id)}`)))
+    return animeMeta(site, id, await apiGet<AnimeDetails>(api, `/anime/${encodeURIComponent(id)}`))
   }
   if (kind === 'episode') {
-    const ep = await apiGet<OploEpisode>(api, `/episode/${encodeURIComponent(id)}`)
-    const anime = ep.seriesSlug
-      ? await apiGet<OploAnime>(api, `/anime/${encodeURIComponent(ep.seriesSlug)}`).catch(() => undefined)
-      : undefined
-    return episodeMeta(
-      site,
-      id,
-      { title: ep.title, animeId: ep.seriesSlug, releaseTime: ep.releasedOn },
-      anime ? { title: anime.title, poster: anime.poster } : undefined,
-    )
+    const ep = await apiGet<EpisodeDetails>(api, `/episode/${encodeURIComponent(id)}`)
+    const anime = await apiGet<AnimeDetails>(api, `/anime/${encodeURIComponent(ep.animeId)}`).catch(() => undefined)
+    return episodeMeta(site, id, ep, anime)
   }
   return null
 }

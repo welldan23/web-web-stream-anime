@@ -11,7 +11,7 @@ import {
   dedupe,
   displayTitle,
   episodeOf,
-  findOnSite,
+  findOnOtakudesu,
   formatTime,
   prepareImage,
   searchByImage,
@@ -22,11 +22,11 @@ import {
 
 type Source = { file: Blob } | { url: string }
 
-/** Cocokin satu hasil trace.moe ke Animeku (dipakai bareng sama kartu besar & baris kecil). */
-function useSiteMatch(r: TraceResult) {
+/** Cocokin satu hasil trace.moe ke otakudesu (dipakai bareng sama kartu besar & baris kecil). */
+function useOtakudesu(r: TraceResult) {
   return useQuery({
     queryKey: ['trace-match', r.anilist.id, episodeOf(r)],
-    queryFn: () => findOnSite(r),
+    queryFn: () => findOnOtakudesu(r),
     staleTime: 1000 * 60 * 60,
     retry: false,
   })
@@ -38,11 +38,11 @@ function sceneText(r: TraceResult) {
 }
 
 function TopResult({ r }: { r: TraceResult }) {
-  const match = useSiteMatch(r)
+  const match = useOtakudesu(r)
   const conf = confidence(r)
   const ep = episodeOf(r)
-  const watchTo = match.data?.episodePath ?? null
-  const animeTo = match.data?.animePath ?? null
+  const watchTo = match.data?.episodeId ? `/nonton/${match.data.episodeId}` : null
+  const animeTo = match.data ? `/anime/${match.data.anime.animeId}` : null
   const fallbackTo = `/cari?q=${encodeURIComponent(displayTitle(r))}`
 
   return (
@@ -84,7 +84,7 @@ function TopResult({ r }: { r: TraceResult }) {
               to={animeTo}
               className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary-500 py-3 text-[15px] font-semibold text-on-primary active:opacity-80"
             >
-              Buka {match.data!.animeTitle}
+              Buka {match.data!.anime.title}
             </Link>
           ) : (
             <Link
@@ -112,8 +112,12 @@ function TopResult({ r }: { r: TraceResult }) {
 }
 
 function OtherResult({ r, isLast }: { r: TraceResult; isLast: boolean }) {
-  const match = useSiteMatch(r)
-  const to = match.data?.episodePath ?? match.data?.animePath ?? `/cari?q=${encodeURIComponent(displayTitle(r))}`
+  const match = useOtakudesu(r)
+  const to = match.data?.episodeId
+    ? `/nonton/${match.data.episodeId}`
+    : match.data
+      ? `/anime/${match.data.anime.animeId}`
+      : `/cari?q=${encodeURIComponent(displayTitle(r))}`
   const conf = confidence(r)
   return (
     <Link to={to} className={cn('flex items-center gap-3 py-3 active:opacity-70', !isLast && 'border-b border-line')}>

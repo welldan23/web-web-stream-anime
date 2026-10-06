@@ -12,7 +12,6 @@ const library = () => import('./pages/LibraryPages')
 const SchedulePage = lazy(() => browse().then((m) => ({ default: m.SchedulePage })))
 const OngoingPage = lazy(() => browse().then((m) => ({ default: m.OngoingPage })))
 const CompletedPage = lazy(() => browse().then((m) => ({ default: m.CompletedPage })))
-const MoviePage = lazy(() => browse().then((m) => ({ default: m.MoviePage })))
 const GenresPage = lazy(() => browse().then((m) => ({ default: m.GenresPage })))
 const GenrePage = lazy(() => browse().then((m) => ({ default: m.GenrePage })))
 const AzPage = lazy(() => browse().then((m) => ({ default: m.AzPage })))
@@ -29,7 +28,6 @@ export default function App() {
         <Route path="jadwal" element={<SchedulePage />} />
         <Route path="ongoing" element={<OngoingPage />} />
         <Route path="tamat" element={<CompletedPage />} />
-        <Route path="film" element={<MoviePage />} />
         <Route path="genre" element={<GenresPage />} />
         <Route path="genre/:genreId" element={<GenrePage />} />
         <Route path="daftar" element={<AzPage />} />

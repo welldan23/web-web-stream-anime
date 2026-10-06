@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowDownUp, Bookmark, BookmarkCheck, Check, Play, Search } from 'lucide-react'
-import { api, ApiError, GENRES } from '../lib/api'
-import { shortEpisodeLabel } from '../lib/episodes'
+import { api } from '../lib/api'
+import { shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { isInWatchlist, toggleWatchlist, useLibrary } from '../lib/library'
 import { cn } from '../lib/cn'
 import BackButton from '../components/BackButton'
@@ -11,9 +11,10 @@ import { AnimeFactCard } from '../components/AnimeFacts'
 import { AniListBanner, AniListStats, Characters, ExternalLinks, NextEpisode, Trailer } from '../components/AniList'
 import { findAniList, seasonLabel } from '../lib/anilist'
 import Seo from '../components/Seo'
-import { animeLikeFromOploverz, animeMeta, DEFAULT_DESCRIPTION, pageTitle, titleFromSlug } from '../lib/site'
+import { ApiError } from '../lib/api'
+import { animeMeta, pageTitle, titleFromSlug, DEFAULT_DESCRIPTION } from '../lib/site'
 import { SITE_URL } from '../lib/siteUrl'
-import { Card, CardSection, ErrorState, Pill, Poster, Score, Skeleton } from '../components/ui'
+import { AnimeCard, Card, CardGrid, CardSection, ErrorState, Pill, Poster, Score, Skeleton } from '../components/ui'
 
 function InfoRow({ label, value, isLast }: { label: string; value?: string; isLast?: boolean }) {
   if (!value) return null
@@ -25,9 +26,6 @@ function InfoRow({ label, value, isLast }: { label: string; value?: string; isLa
   )
 }
 
-const isFinished = (status: string) => /complete|tamat|selesai|finished/i.test(status)
-const genreId = (title: string) => GENRES.find((g) => g.title.toLowerCase() === title.toLowerCase())?.id
-
 export default function AnimePage() {
   const { animeId = '' } = useParams()
   const { data, isLoading, error, refetch } = useQuery({
@@ -37,7 +35,7 @@ export default function AnimePage() {
   // data tambahan dari AniList; kalau gagal/nggak ketemu, halaman tetap jalan tanpa bagian ini
   const { data: al } = useQuery({
     queryKey: ['anilist', animeId],
-    queryFn: () => findAniList(animeId, data!.title),
+    queryFn: () => findAniList(animeId, data!.title, data!.japanese),
     enabled: Boolean(data),
     staleTime: 1000 * 60 * 60 * 6,
     retry: 1,
@@ -48,10 +46,10 @@ export default function AnimePage() {
   const [expanded, setExpanded] = useState(false)
 
   const episodes = useMemo(() => {
-    const asc = data?.episodeList ?? []
+    const asc = sortEpisodesAsc(data?.episodeList ?? [])
     const ordered = newestFirst ? [...asc].reverse() : asc
     const f = filter.trim().toLowerCase()
-    return f ? ordered.filter((e) => String(e.number ?? e.title).toLowerCase().includes(f)) : ordered
+    return f ? ordered.filter((e) => shortEpisodeLabel(e.title).toLowerCase().includes(f)) : ordered
   }, [data, newestFirst, filter])
 
   const fallbackSeo = (
@@ -82,25 +80,28 @@ export default function AnimePage() {
       </div>
     )
 
-  const firstEpisode = data.episodeList[0]
+  const firstEpisode = sortEpisodesAsc(data.episodeList)[0]
   const lastWatched = library.history.find((h) => h.animeId === animeId)
   const target = lastWatched?.episodeId ?? firstEpisode?.episodeId
   const saved = isInWatchlist(animeId)
+  const synopsis = data.synopsis.paragraphList.filter(Boolean)
+  const finished = /complete|tamat/i.test(data.status)
   const infoRows: [string, string | undefined][] = [
+    ['Judul Jepang', data.japanese],
     ['Tipe', data.type],
     ['Status', data.status],
-    ['Episode', data.episodeList.length ? String(data.episodeList.length) : undefined],
+    ['Episode', data.episodes],
     ['Durasi', data.duration],
-    ['Tayang', data.releasedOn],
-    ['Musim', data.season || (al ? (seasonLabel(al) ?? undefined) : undefined)],
-    ['Studio', data.studio || al?.studios.nodes.map((s) => s.name).join(', ')],
-    ['Diperbarui', data.updatedOn],
+    ['Tayang', data.aired],
+    ['Musim', al ? (seasonLabel(al) ?? undefined) : undefined],
+    ['Studio', data.studios || al?.studios.nodes.map((s) => s.name).join(', ')],
+    ['Produser', data.producers],
   ]
   const info = infoRows.filter((row): row is [string, string] => Boolean(row[1]))
 
   return (
     <div className="space-y-4">
-      <Seo {...animeMeta(SITE_URL, animeId, animeLikeFromOploverz({ ...data, synopsis: { paragraphList: data.synopsis } }))} />
+      <Seo {...animeMeta(SITE_URL, animeId, data)} />
       <BackButton />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -111,25 +112,22 @@ export default function AnimePage() {
               <Poster src={data.poster} alt={data.title} className="aspect-[3/4] w-28 rounded-[14px] sm:w-36" />
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl font-bold leading-snug text-ink sm:text-2xl">{data.title}</h1>
-                {al?.title.native ? <p className="mt-0.5 line-clamp-1 text-sm text-ink-muted">{al.title.native}</p> : null}
+                {data.japanese ? <p className="mt-0.5 line-clamp-1 text-sm text-ink-muted">{data.japanese}</p> : null}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {data.status ? <Pill tone={isFinished(data.status) ? 'success' : 'primary'}>{data.status}</Pill> : null}
+                  {data.status ? <Pill tone={finished ? 'success' : 'primary'}>{data.status}</Pill> : null}
                   {data.type ? <Pill tone="neutral">{data.type}</Pill> : null}
                   <Score score={data.score} className="text-sm" />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {data.genres.map((g) => {
-                    const id = genreId(g)
-                    return (
-                      <Link
-                        key={g}
-                        to={id ? `/genre/${id}` : `/cari?q=${encodeURIComponent(g)}`}
-                        className="text-[13px] font-medium text-primary-500 hover:underline"
-                      >
-                        #{g.replace(/\s+/g, '')}
-                      </Link>
-                    )
-                  })}
+                  {data.genreList.map((g) => (
+                    <Link
+                      key={g.genreId}
+                      to={`/genre/${g.genreId}`}
+                      className="text-[13px] font-medium text-primary-500 hover:underline"
+                    >
+                      #{g.title.replace(/\s+/g, '')}
+                    </Link>
+                  ))}
                 </div>
               </div>
             </div>
@@ -159,10 +157,10 @@ export default function AnimePage() {
           {al ? <NextEpisode media={al} /> : null}
           {al ? <AniListStats media={al} /> : null}
 
-          {data.synopsis.length > 0 ? (
+          {synopsis.length > 0 ? (
             <CardSection title="Sinopsis">
               <div className={cn('space-y-3 text-[15px] leading-relaxed text-ink-soft', !expanded && 'line-clamp-4')}>
-                {data.synopsis.map((p, i) => (
+                {synopsis.map((p, i) => (
                   <p key={i}>{p}</p>
                 ))}
               </div>
@@ -217,7 +215,7 @@ export default function AnimePage() {
                       )}
                     >
                       {watched ? <Check className="size-3.5" /> : null}
-                      <span className="truncate">{e.number !== null ? `Ep ${e.number}` : e.title}</span>
+                      <span className="truncate">{shortEpisodeLabel(e.title).replace('Episode ', 'Ep ')}</span>
                     </Link>
                   )
                 })}
@@ -244,6 +242,16 @@ export default function AnimePage() {
           ) : null}
         </div>
       </div>
+
+      {data.recommendedAnimeList.length > 0 ? (
+        <CardSection title="Mirip Sama Ini">
+          <CardGrid>
+            {data.recommendedAnimeList.slice(0, 12).map((a) => (
+              <AnimeCard key={a.animeId} animeId={a.animeId} title={a.title} poster={a.poster} />
+            ))}
+          </CardGrid>
+        </CardSection>
+      ) : null}
     </div>
   )
 }
