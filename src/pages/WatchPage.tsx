@@ -1,30 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import {
-  ArrowLeft,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Loader2,
-  MonitorPlay,
-  Server as ServerIcon,
-  Expand,
-  Shrink,
-} from 'lucide-react'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, ExternalLink, Loader2 } from 'lucide-react'
 import { api, type Server } from '../lib/api'
 import { recordWatch, useLibrary } from '../lib/library'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
-import { ErrorState, Skeleton } from '../components/ui'
 import { cn } from '../lib/cn'
+import { Card, Chip, ErrorState, Notice, Pill, Skeleton } from '../components/ui'
+
+function GroupTitle({ children }: { children: React.ReactNode }) {
+  return <p className="px-1 text-xs font-semibold uppercase text-ink-faint">{children}</p>
+}
 
 export default function WatchPage() {
   const { episodeId = '' } = useParams()
   const library = useLibrary()
   // server yang dipilih user, diikat ke episode-nya biar otomatis balik ke default pas ganti episode
   const [picked, setPicked] = useState<{ episodeId: string; serverId: string; url?: string } | null>(null)
-  const [theater, setTheater] = useState(false)
   const activeEpisodeRef = useRef<HTMLAnchorElement>(null)
 
   const episode = useQuery({ queryKey: ['episode', episodeId], queryFn: () => api.episode(episodeId) })
@@ -86,25 +78,25 @@ export default function WatchPage() {
   const epNumber = ep ? episodeNumber(ep.title) : null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {ep ? (
         <Link
           to={`/anime/${ep.animeId}`}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-white"
+          className="inline-flex max-w-full items-center gap-2 py-1 text-[15px] font-semibold text-ink active:opacity-70"
         >
-          <ArrowLeft className="size-4" /> {anime.data?.title ?? 'Kembali ke detail'}
+          <ArrowLeft className="size-6 shrink-0" />
+          <span className="truncate">{anime.data?.title ?? 'Detail anime'}</span>
         </Link>
       ) : (
-        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-8 w-48" />
       )}
 
-      <div className={cn('grid gap-6', !theater && 'xl:grid-cols-[1fr_340px]')}>
+      <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
         <div className="min-w-0 space-y-4">
-          {/* Player */}
-          <div className="relative aspect-video overflow-hidden rounded-2xl bg-black ring-1 ring-white/5">
+          <div className="relative aspect-video overflow-hidden rounded-[20px] bg-black">
             {episode.isLoading || serverPending ? (
               <div className="absolute inset-0 grid place-items-center">
-                <Loader2 className="size-10 animate-spin text-accent" />
+                <Loader2 className="size-8 animate-spin text-white/70" />
               </div>
             ) : src ? (
               <iframe
@@ -117,176 +109,141 @@ export default function WatchPage() {
                 className="absolute inset-0 h-full w-full"
               />
             ) : (
-              <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-muted">
-                Player default nggak tersedia. Pilih server di bawah ya.
+              <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-white/70">
+                Player utama nggak tersedia. Pilih server di bawah.
               </div>
             )}
           </div>
 
-          {/* Judul + navigasi */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              {ep ? (
-                <>
-                  <p className="text-xs font-bold uppercase tracking-widest text-accent">
-                    {epNumber !== null ? `Episode ${epNumber}` : 'Sedang ditonton'}
-                  </p>
-                  <h1 className="mt-1 text-lg font-bold leading-snug sm:text-xl">{ep.title}</h1>
-                  {ep.releaseTime ? <p className="mt-1 text-xs text-muted">Rilis: {ep.releaseTime}</p> : null}
-                </>
-              ) : (
-                <Skeleton className="h-12 w-72" />
-              )}
+          <Card className="p-4 sm:p-5">
+            {ep ? (
+              <>
+                <p className="text-[13px] font-medium text-ink-muted">
+                  {epNumber !== null ? `Episode ${epNumber}` : 'Sedang diputar'}
+                  {ep.releaseTime ? ` · ${ep.releaseTime}` : ''}
+                </p>
+                <h1 className="mt-0.5 text-lg font-bold leading-snug text-ink sm:text-xl">{ep.title}</h1>
+              </>
+            ) : (
+              <Skeleton className="h-12" />
+            )}
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <EpisodeNav to={ep?.prevEpisode?.episodeId} dir="prev" />
+              <EpisodeNav to={ep?.nextEpisode?.episodeId} dir="next" />
             </div>
-            <div className="flex shrink-0 gap-2">
-              <button
-                onClick={() => setTheater((v) => !v)}
-                className="hidden h-10 items-center gap-1.5 rounded-lg bg-surface px-3 text-sm font-semibold text-muted hover:text-white xl:inline-flex"
-              >
-                {theater ? <Shrink className="size-4" /> : <Expand className="size-4" />}
-                {theater ? 'Normal' : 'Bioskop'}
-              </button>
-              <EpisodeNav to={ep?.prevEpisode?.episodeId} label="Sebelumnya" dir="prev" />
-              <EpisodeNav to={ep?.nextEpisode?.episodeId} label="Berikutnya" dir="next" />
-            </div>
-          </div>
+          </Card>
 
-          {/* Server */}
-          <div className="rounded-2xl border border-line bg-surface p-4">
-            <div className="mb-3">
-              <p className="flex items-center gap-2 text-sm font-bold">
-                <ServerIcon className="size-4 text-accent" /> Pilih Server
-              </p>
-              <p className="mt-0.5 text-xs text-muted">Kalau video nggak muncul, coba server lain.</p>
-            </div>
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="w-14 text-xs font-bold text-muted">Default</span>
-                <button
-                  onClick={() => pickServer(null)}
-                  className={cn(
-                    'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
-                    activeServer === null ? 'bg-accent text-white' : 'bg-surface-2 text-zinc-300 hover:bg-line',
-                  )}
-                >
-                  <MonitorPlay className="mr-1 inline size-3.5" /> Utama
-                </button>
+          {serverError ? <Notice tone="danger">Server ini lagi bermasalah. Coba pilih server lain.</Notice> : null}
+
+          <div className="space-y-2">
+            <GroupTitle>Server</GroupTitle>
+            <Card className="px-4">
+              <div className="flex flex-wrap items-center gap-2 border-b border-line py-3">
+                <span className="w-12 text-sm font-semibold text-ink-muted">Utama</span>
+                <Chip size="sm" active={activeServer === null} onClick={() => pickServer(null)}>
+                  Default
+                </Chip>
               </div>
-              {qualities.map((q) => (
-                <div key={q.title} className="flex flex-wrap items-center gap-2">
-                  <span className="w-14 text-xs font-bold text-muted">{q.title}</span>
+              {qualities.map((q, i) => (
+                <div
+                  key={q.title}
+                  className={cn('flex flex-wrap items-center gap-2 py-3', i < qualities.length - 1 && 'border-b border-line')}
+                >
+                  <span className="w-12 text-sm font-semibold text-ink-muted">{q.title}</span>
                   {q.serverList!.map((s) => (
-                    <button
-                      key={s.serverId}
-                      onClick={() => pickServer(s)}
-                      className={cn(
-                        'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
-                        activeServer === s.serverId
-                          ? 'bg-accent text-white'
-                          : 'bg-surface-2 text-zinc-300 hover:bg-line',
-                      )}
-                    >
+                    <Chip size="sm" key={s.serverId} active={activeServer === s.serverId} onClick={() => pickServer(s)}>
                       {s.title}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
               ))}
-              {serverError ? (
-                <p className="text-xs text-accent">Server ini lagi bermasalah, coba yang lain.</p>
-              ) : null}
-            </div>
+            </Card>
+            <p className="px-1 text-xs text-ink-muted">Video nggak muncul atau lemot? Coba ganti server.</p>
           </div>
 
-          {/* Download */}
           {downloads.length > 0 ? (
-            <details className="group rounded-2xl border border-line bg-surface p-4">
-              <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold">
-                <Download className="size-4 text-accent" /> Download Episode
-                <ChevronRight className="ml-auto size-4 transition group-open:rotate-90" />
-              </summary>
-              <div className="mt-4 space-y-3">
-                {downloads.map((q) => (
-                  <div key={q.title} className="flex flex-wrap items-center gap-2">
-                    <span className="w-28 text-xs font-bold text-muted">
-                      {q.title}
-                      {q.size ? <span className="block font-normal">{q.size}</span> : null}
-                    </span>
-                    {q.urlList!.map((u, i) => (
+            <div className="space-y-2">
+              <GroupTitle>Download</GroupTitle>
+              <Card className="px-4">
+                {downloads.map((q, i) => (
+                  <div
+                    key={q.title}
+                    className={cn('flex flex-wrap items-center gap-2 py-3', i < downloads.length - 1 && 'border-b border-line')}
+                  >
+                    <div className="mr-auto min-w-28">
+                      <p className="text-sm font-semibold text-ink">{q.title}</p>
+                      {q.size ? <p className="text-xs text-ink-muted">{q.size}</p> : null}
+                    </div>
+                    {q.urlList!.map((u, j) => (
                       <a
-                        key={`${u.title}-${i}`}
+                        key={`${u.title}-${j}`}
                         href={u.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-lg bg-surface-2 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-line hover:text-white"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-3 py-1.5 text-[13px] font-semibold text-primary-600 active:opacity-70"
                       >
                         {u.title}
+                        <ExternalLink className="size-3" />
                       </a>
                     ))}
                   </div>
                 ))}
-              </div>
-            </details>
+              </Card>
+            </div>
           ) : null}
         </div>
 
-        {/* Daftar episode */}
-        <aside className="h-fit overflow-hidden rounded-2xl border border-line bg-surface">
-          <div className="border-b border-line px-4 py-3 text-sm font-bold">Daftar Episode ({episodes.length})</div>
-          <div
-            className={cn(
-              'thin-scroll relative overflow-y-auto p-2',
-              theater ? 'grid max-h-72 grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-6' : 'max-h-[60vh] space-y-1',
-            )}
-          >
-            {episodes.length === 0
-              ? Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-10" />)
-              : episodes.map((e) => {
-                  const active = e.episodeId === episodeId
-                  const watched = library.watched.includes(e.episodeId)
-                  return (
-                    <Link
-                      key={e.episodeId}
-                      ref={active ? activeEpisodeRef : undefined}
-                      to={`/nonton/${e.episodeId}`}
-                      title={e.title}
-                      className={cn(
-                        'flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition',
-                        active
-                          ? 'bg-gradient-to-r from-accent to-accent-2 text-white'
-                          : watched
-                            ? 'text-muted hover:bg-surface-2'
-                            : 'hover:bg-surface-2',
-                      )}
-                    >
-                      <span className="truncate">{shortEpisodeLabel(e.title)}</span>
-                      {active ? (
-                        <span className="text-[10px] font-bold uppercase">Diputar</span>
-                      ) : watched ? (
-                        <CheckCircle2 className="size-4 shrink-0 text-accent/70" />
-                      ) : null}
-                    </Link>
-                  )
-                })}
-          </div>
-        </aside>
+        <div className="space-y-2">
+          <GroupTitle>Daftar episode ({episodes.length})</GroupTitle>
+          <Card className="overflow-hidden">
+            <div className="thin-scroll relative max-h-[420px] overflow-y-auto lg:max-h-[calc(100dvh-160px)]">
+              {episodes.length === 0
+                ? Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="m-3 h-8" />)
+                : episodes.map((e, i) => {
+                    const active = e.episodeId === episodeId
+                    const watched = library.watched.includes(e.episodeId)
+                    return (
+                      <Link
+                        key={e.episodeId}
+                        ref={active ? activeEpisodeRef : undefined}
+                        to={`/nonton/${e.episodeId}`}
+                        title={e.title}
+                        className={cn(
+                          'flex items-center justify-between gap-2 px-4 py-3 text-[15px] active:opacity-70',
+                          i < episodes.length - 1 && 'border-b border-line',
+                          active ? 'bg-primary-50 font-semibold text-primary-600' : 'text-ink hover:bg-subtle',
+                        )}
+                      >
+                        <span className="truncate">{shortEpisodeLabel(e.title)}</span>
+                        {active ? (
+                          <Pill>Diputar</Pill>
+                        ) : watched ? (
+                          <Check className="size-4 shrink-0 text-success-500" aria-label="sudah ditonton" />
+                        ) : null}
+                      </Link>
+                    )
+                  })}
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   )
 }
 
-function EpisodeNav({ to, label, dir }: { to?: string; label: string; dir: 'prev' | 'next' }) {
-  const Icon = dir === 'prev' ? ChevronLeft : ChevronRight
+function EpisodeNav({ to, dir }: { to?: string; dir: 'prev' | 'next' }) {
+  const prev = dir === 'prev'
+  const base = 'flex items-center justify-center gap-1 rounded-full py-3 text-[15px] font-semibold'
   const content = (
     <>
-      {dir === 'prev' ? <Icon className="size-4" /> : null}
-      <span className="hidden sm:inline">{label}</span>
-      {dir === 'next' ? <Icon className="size-4" /> : null}
+      {prev ? <ChevronLeft className="size-[18px]" /> : null}
+      {prev ? 'Sebelumnya' : 'Berikutnya'}
+      {!prev ? <ChevronRight className="size-[18px]" /> : null}
     </>
   )
-  const base = 'inline-flex h-10 items-center gap-1 rounded-lg px-3 text-sm font-semibold'
   if (!to) {
     return (
-      <span className={cn(base, 'cursor-not-allowed bg-surface text-muted/50')} aria-disabled>
+      <span className={cn(base, 'cursor-not-allowed bg-subtle text-ink-faint')} aria-disabled>
         {content}
       </span>
     )
@@ -294,8 +251,7 @@ function EpisodeNav({ to, label, dir }: { to?: string; label: string; dir: 'prev
   return (
     <Link
       to={`/nonton/${to}`}
-      className={cn(base, dir === 'next' ? 'bg-accent text-white hover:brightness-110' : 'bg-surface hover:bg-surface-2')}
-      aria-label={label}
+      className={cn(base, 'active:opacity-80', prev ? 'bg-tile text-ink' : 'bg-primary-500 text-white')}
     >
       {content}
     </Link>

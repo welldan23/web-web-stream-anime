@@ -2,23 +2,26 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { SearchX } from 'lucide-react'
+import { ChevronRight, Search, SearchX } from 'lucide-react'
 import { api } from '../lib/api'
 import { DAYS, normalizeDay, todayName } from '../lib/days'
+import { cn } from '../lib/cn'
 import SearchBox from '../components/SearchBox'
 import {
   AnimeCard,
-  Badge,
+  Card,
   CardGrid,
   CardGridSkeleton,
+  Chip,
   EmptyState,
   ErrorState,
-  PageHeader,
+  ListRow,
+  PageTitle,
   Pager,
-  ScoreBadge,
+  Pill,
+  Score,
   Skeleton,
 } from '../components/ui'
-import { cn } from '../lib/cn'
 
 function usePage() {
   const [params, setParams] = useSearchParams()
@@ -31,6 +34,10 @@ function usePage() {
   return [page, setPage] as const
 }
 
+function GridCard({ children }: { children: React.ReactNode }) {
+  return <Card className="p-4 sm:p-5">{children}</Card>
+}
+
 export function OngoingPage() {
   const [page, setPage] = usePage()
   const { data, isLoading, error, refetch } = useQuery({
@@ -40,25 +47,29 @@ export function OngoingPage() {
   })
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Sedang Tayang" subtitle="Anime yang masih rilis episode baru tiap minggu." />
+    <div className="space-y-4">
+      <PageTitle title="Sedang Tayang" subtitle="Masih rilis episode baru tiap minggu" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
-      ) : isLoading ? (
-        <CardGridSkeleton count={18} />
       ) : (
-        <CardGrid>
-          {data?.data.animeList.map((a) => (
-            <AnimeCard
-              key={a.animeId}
-              animeId={a.animeId}
-              title={a.title}
-              poster={a.poster}
-              topLeft={<Badge tone="accent">Ep {a.episodes}</Badge>}
-              subtitle={`${a.releaseDay} • ${a.latestReleaseDate}`}
-            />
-          ))}
-        </CardGrid>
+        <GridCard>
+          {isLoading ? (
+            <CardGridSkeleton count={18} />
+          ) : (
+            <CardGrid>
+              {data?.data.animeList.map((a) => (
+                <AnimeCard
+                  key={a.animeId}
+                  animeId={a.animeId}
+                  title={a.title}
+                  poster={a.poster}
+                  label={`Ep ${a.episodes}`}
+                  meta={`${a.releaseDay} · ${a.latestReleaseDate}`}
+                />
+              ))}
+            </CardGrid>
+          )}
+        </GridCard>
       )}
       <Pager pagination={data?.pagination} page={page} onChange={setPage} />
     </div>
@@ -74,26 +85,29 @@ export function CompletedPage() {
   })
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Sudah Tamat" subtitle="Anime yang episodenya udah lengkap. Pas buat maraton." />
+    <div className="space-y-4">
+      <PageTitle title="Sudah Tamat" subtitle="Episodenya udah lengkap, pas buat maraton" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
-      ) : isLoading ? (
-        <CardGridSkeleton count={18} />
       ) : (
-        <CardGrid>
-          {data?.data.animeList.map((a) => (
-            <AnimeCard
-              key={a.animeId}
-              animeId={a.animeId}
-              title={a.title}
-              poster={a.poster}
-              topLeft={<Badge>{a.episodes} Eps</Badge>}
-              topRight={<ScoreBadge score={a.score} />}
-              subtitle={a.lastReleaseDate}
-            />
-          ))}
-        </CardGrid>
+        <GridCard>
+          {isLoading ? (
+            <CardGridSkeleton count={18} />
+          ) : (
+            <CardGrid>
+              {data?.data.animeList.map((a) => (
+                <AnimeCard
+                  key={a.animeId}
+                  animeId={a.animeId}
+                  title={a.title}
+                  poster={a.poster}
+                  label={`${a.episodes} eps`}
+                  meta={<Score score={a.score} />}
+                />
+              ))}
+            </CardGrid>
+          )}
+        </GridCard>
       )}
       <Pager pagination={data?.pagination} page={page} onChange={setPage} />
     </div>
@@ -110,69 +124,67 @@ export function SearchPage() {
   })
 
   return (
-    <div className="space-y-6">
-      <SearchBox key={q} className="sm:hidden" />
-      <PageHeader title={q ? `Hasil pencarian “${q}”` : 'Cari Anime'} />
+    <div className="space-y-4">
+      <PageTitle title="Cari" subtitle={q ? `Hasil buat “${q}”` : undefined} />
+      <SearchBox key={q} className="lg:hidden" />
       {!q ? (
-        <EmptyState icon={<SearchX className="size-8" />} title="Ketik judul anime yang mau dicari" />
+        <EmptyState icon={<Search className="size-5" />} title="Mau nonton apa?">
+          Ketik judul anime, misalnya “One Piece” atau “Frieren”.
+        </EmptyState>
       ) : error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : isLoading ? (
-        <CardGridSkeleton />
+        <GridCard>
+          <CardGridSkeleton />
+        </GridCard>
       ) : data && data.length > 0 ? (
-        <CardGrid>
-          {data.map((a) => (
-            <AnimeCard
+        <Card className="px-4">
+          {data.map((a, i) => (
+            <ListRow
               key={a.animeId}
-              animeId={a.animeId}
-              title={a.title}
+              to={`/anime/${a.animeId}`}
               poster={a.poster}
-              topLeft={a.status ? <Badge>{a.status}</Badge> : null}
-              topRight={<ScoreBadge score={a.score} />}
+              title={a.title}
               subtitle={a.genreList.map((g) => g.title).join(', ')}
+              trailing={
+                <div className="flex flex-col items-end gap-1">
+                  {a.status ? <Pill tone={/complete|tamat/i.test(a.status) ? 'success' : 'primary'}>{a.status}</Pill> : null}
+                  <Score score={a.score} />
+                </div>
+              }
+              isLast={i === data.length - 1}
             />
           ))}
-        </CardGrid>
+        </Card>
       ) : (
-        <EmptyState icon={<SearchX className="size-8" />} title="Nggak ada hasil">
-          Coba pakai kata kunci lain, misalnya judul bahasa Jepang-nya.
+        <EmptyState icon={<SearchX className="size-5" />} title="Nggak ketemu">
+          Coba kata kunci lain, atau pakai judul Jepang-nya.
         </EmptyState>
       )}
     </div>
   )
 }
 
-const GENRE_COLORS = [
-  'from-rose-500/30',
-  'from-violet-500/30',
-  'from-sky-500/30',
-  'from-emerald-500/30',
-  'from-amber-500/30',
-  'from-fuchsia-500/30',
-]
-
 export function GenresPage() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['genres'], queryFn: api.genres })
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Genre" subtitle="Pilih genre favorit kamu." />
+    <div className="space-y-4">
+      <PageTitle title="Genre" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {isLoading
-            ? Array.from({ length: 20 }, (_, i) => <Skeleton key={i} className="h-16" />)
-            : data?.map((g, i) => (
+            ? Array.from({ length: 16 }, (_, i) => <Skeleton key={i} className="h-[52px] rounded-2xl" />)
+            : data?.map((g) => (
                 <Link
                   key={g.genreId}
                   to={`/genre/${g.genreId}`}
-                  className={cn(
-                    'rounded-xl border border-line bg-gradient-to-br to-surface px-4 py-5 text-sm font-bold transition hover:-translate-y-0.5 hover:border-accent/50',
-                    GENRE_COLORS[i % GENRE_COLORS.length],
-                  )}
+                  className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5 text-[15px] font-semibold text-ink shadow-card active:opacity-70"
                 >
                   {g.title}
+                  <ChevronRight className="size-4 text-ink-faint" />
                 </Link>
               ))}
         </div>
@@ -193,26 +205,29 @@ export function GenrePage() {
   const genreTitle = genres.data?.find((g) => g.genreId === genreId)?.title ?? genreId
 
   return (
-    <div className="space-y-6">
-      <PageHeader title={`Genre: ${genreTitle}`} />
+    <div className="space-y-4">
+      <PageTitle title={genreTitle} subtitle="Genre" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
-      ) : isLoading ? (
-        <CardGridSkeleton count={18} />
       ) : (
-        <CardGrid>
-          {data?.data.animeList.map((a) => (
-            <AnimeCard
-              key={a.animeId}
-              animeId={a.animeId}
-              title={a.title}
-              poster={a.poster}
-              topLeft={a.episodes ? <Badge>{a.episodes} Eps</Badge> : null}
-              topRight={<ScoreBadge score={a.score} />}
-              subtitle={[a.studios, a.season].filter(Boolean).join(' • ')}
-            />
-          ))}
-        </CardGrid>
+        <GridCard>
+          {isLoading ? (
+            <CardGridSkeleton count={18} />
+          ) : (
+            <CardGrid>
+              {data?.data.animeList.map((a) => (
+                <AnimeCard
+                  key={a.animeId}
+                  animeId={a.animeId}
+                  title={a.title}
+                  poster={a.poster}
+                  label={a.episodes ? `${a.episodes} eps` : undefined}
+                  meta={<Score score={a.score} />}
+                />
+              ))}
+            </CardGrid>
+          )}
+        </GridCard>
       )}
       <Pager pagination={data?.pagination} page={page} onChange={setPage} />
     </div>
@@ -223,7 +238,7 @@ export function SchedulePage() {
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['schedule'], queryFn: api.schedule })
   const [selected, setSelected] = useState<string | null>(null)
 
-  // urutkan Senin -> Minggu, default tab = hari ini
+  // urutkan Senin -> Minggu, default = hari ini
   const days = useMemo(() => {
     const order = [...DAYS.slice(1), DAYS[0]].map(normalizeDay)
     return [...(data ?? [])].sort((a, b) => {
@@ -232,53 +247,37 @@ export function SchedulePage() {
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
     })
   }, [data])
-  const active =
-    selected ??
-    days.find((d) => normalizeDay(d.title) === normalizeDay(todayName()))?.title ??
-    days[0]?.title
+  const isToday = (day: string) => normalizeDay(day) === normalizeDay(todayName())
+  const active = selected ?? days.find((d) => isToday(d.title))?.title ?? days[0]?.title
   const current = days.find((d) => d.title === active)
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Jadwal Rilis" subtitle="Jadwal tayang anime ongoing tiap minggunya." />
+    <div className="space-y-4">
+      <PageTitle title="Jadwal Rilis" subtitle="Anime ongoing yang tayang tiap minggu" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : isLoading ? (
-        <Skeleton className="h-96" />
+        <Skeleton className="h-96 rounded-[20px]" />
       ) : (
         <>
-          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            {days.map((d) => {
-              const isToday = normalizeDay(d.title) === normalizeDay(todayName())
-              return (
-                <button
-                  key={d.title}
-                  onClick={() => setSelected(d.title)}
-                  className={cn(
-                    'shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition',
-                    d.title === active
-                      ? 'bg-gradient-to-r from-accent to-accent-2 text-white shadow-lg shadow-accent/20'
-                      : 'bg-surface text-muted hover:text-white',
-                  )}
-                >
-                  {d.title}
-                  {isToday ? <span className="ml-1.5 text-[10px] uppercase opacity-80">• Hari ini</span> : null}
-                </button>
-              )
-            })}
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {current?.animeList.map((a, i) => (
-              <Link
-                key={a.animeId}
-                to={`/anime/${a.animeId}`}
-                className="flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition hover:border-accent/50"
-              >
-                <span className="w-6 text-sm font-bold text-muted">{String(i + 1).padStart(2, '0')}</span>
-                <span className="line-clamp-1 text-sm font-semibold">{a.title}</span>
-              </Link>
+          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+            {days.map((d) => (
+              <Chip key={d.title} active={d.title === active} onClick={() => setSelected(d.title)}>
+                {d.title}
+                {isToday(d.title) ? <span className="size-1.5 rounded-full bg-success-500" aria-label="hari ini" /> : null}
+              </Chip>
             ))}
           </div>
+          <Card className="px-4">
+            <div className="flex items-center justify-between border-b border-line py-3">
+              <p className="font-bold text-ink">{active}</p>
+              <span className="text-sm text-ink-muted">{current?.animeList.length ?? 0} anime</span>
+            </div>
+            {current?.animeList.map((a, i, arr) => (
+              <ListRow key={a.animeId} to={`/anime/${a.animeId}`} title={a.title} isLast={i === arr.length - 1} />
+            ))}
+            {current?.animeList.length === 0 ? <p className="py-6 text-center text-sm text-ink-muted">Kosong.</p> : null}
+          </Card>
         </>
       )}
     </div>
@@ -302,63 +301,48 @@ export function AzPage() {
       .filter((g) => g.animeList.length > 0)
   }, [data, letter, filter])
 
+  const letterBtn = (active: boolean) =>
+    cn(
+      'h-9 min-w-9 rounded-full px-2.5 text-sm font-semibold active:opacity-70',
+      active ? 'bg-primary-500 text-white' : 'bg-surface text-ink-soft shadow-card',
+    )
+
   return (
-    <div className="space-y-6">
-      <PageHeader title="Daftar Anime A–Z" subtitle="Semua anime yang ada, urut abjad." />
+    <div className="space-y-4">
+      <PageTitle title="Daftar A–Z" subtitle="Semua anime, urut abjad" />
       {error ? (
         <ErrorState error={error} onRetry={() => refetch()} />
       ) : isLoading ? (
-        <Skeleton className="h-96" />
+        <Skeleton className="h-96 rounded-[20px]" />
       ) : (
         <>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => setLetter(null)}
-              className={cn(
-                'h-9 rounded-lg px-3 text-sm font-bold',
-                !letter ? 'bg-accent text-white' : 'bg-surface text-muted hover:text-white',
-              )}
-            >
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Saring judul"
+            className="h-11 w-full rounded-full border border-line bg-surface px-5 text-[15px] shadow-card outline-none placeholder:text-ink-faint focus:border-primary-500"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setLetter(null)} className={letterBtn(!letter)}>
               Semua
             </button>
             {data?.map((g) => (
-              <button
-                key={g.startWith}
-                onClick={() => setLetter(g.startWith)}
-                className={cn(
-                  'size-9 rounded-lg text-sm font-bold',
-                  letter === g.startWith ? 'bg-accent text-white' : 'bg-surface text-muted hover:text-white',
-                )}
-              >
+              <button key={g.startWith} onClick={() => setLetter(g.startWith)} className={letterBtn(letter === g.startWith)}>
                 {g.startWith}
               </button>
             ))}
           </div>
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Saring judul…"
-            className="h-11 w-full max-w-sm rounded-xl border border-line bg-surface px-4 text-sm outline-none focus:border-accent/60"
-          />
-          <div className="space-y-8">
-            {groups.map((g) => (
-              <section key={g.startWith}>
-                <h2 className="mb-3 text-2xl font-extrabold text-gradient">{g.startWith}</h2>
-                <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {g.animeList.map((a) => (
-                    <Link
-                      key={a.animeId}
-                      to={`/anime/${a.animeId}`}
-                      className="truncate rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-surface hover:text-accent"
-                    >
-                      {a.title}
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            ))}
-            {groups.length === 0 ? <EmptyState icon={<SearchX className="size-8" />} title="Nggak ada yang cocok" /> : null}
-          </div>
+          {groups.map((g) => (
+            <div key={g.startWith} className="space-y-2">
+              <p className="px-1 text-xs font-semibold uppercase text-ink-faint">{g.startWith}</p>
+              <Card className="px-4">
+                {g.animeList.map((a, i) => (
+                  <ListRow key={a.animeId} to={`/anime/${a.animeId}`} title={a.title} isLast={i === g.animeList.length - 1} />
+                ))}
+              </Card>
+            </div>
+          ))}
+          {groups.length === 0 ? <EmptyState icon={<SearchX className="size-5" />} title="Nggak ada yang cocok" /> : null}
         </>
       )}
     </div>

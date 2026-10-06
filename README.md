@@ -1,20 +1,20 @@
 # Animeku 🎬
 
-Web streaming anime subtitle Indonesia dengan tampilan ala **Tatakai** — dark mode, banner sorotan, player dengan pilihan server, koleksi, dan riwayat nonton.
+Web streaming anime subtitle Indonesia. Fiturnya ala **Tatakai** (player dengan pilihan server, koleksi, riwayat nonton), tampilannya ngikutin gaya **MyWallet** ([wallet-custodial](https://github.com/welldan23/wallet-custodial)): header teal dengan menu pil, kartu putih bersudut bulat, aksen biru, dan otomatis ikut mode gelap/terang HP.
 
 Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wajik-anime-api)** (sumber: Otakudesu). Animeku nggak nyimpen atau nge-host video apa pun.
 
 ## Fitur
 
-- **Beranda**: banner sorotan yang ganti otomatis, *Lanjut Nonton*, rilis hari ini, anime sedang tayang & baru tamat
+- **Beranda**: kartu *Lanjut Nonton*, pintasan (Ongoing, Tamat, Genre, A–Z), rilis hari ini, anime sedang tayang & baru tamat
 - **Jadwal rilis** per hari (otomatis kebuka di hari ini)
 - **Sedang Tayang / Sudah Tamat** dengan halaman (pagination)
 - **Genre** dan **Daftar A–Z** (bisa disaring)
 - **Pencarian** anime
 - **Detail anime**: info lengkap, sinopsis, daftar episode (bisa diurutkan & dicari), tanda episode yang udah ditonton, rekomendasi
-- **Halaman nonton**: player, pilih server per kualitas (360p/480p/720p), mode bioskop, episode sebelumnya/berikutnya, link download
+- **Halaman nonton**: player, pilih server per kualitas (360p/480p/720p), episode sebelumnya/berikutnya, link download
 - **Koleksi** (watchlist) dan **Riwayat** — disimpan di browser (localStorage), nggak perlu login
-- Responsif: sidebar di desktop, navigasi bawah di HP
+- Responsif: menu pil di header, navigasi bawah di HP
 
 ## Teknologi
 

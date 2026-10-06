@@ -1,35 +1,20 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownUp, Bookmark, BookmarkCheck, CheckCircle2, Clock, Play, Search, Star, Tv } from 'lucide-react'
+import { ArrowDownUp, Bookmark, BookmarkCheck, Check, Play, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import { shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { isInWatchlist, toggleWatchlist, useLibrary } from '../lib/library'
-import { AnimeCard, CardGrid, ErrorState, Poster, Section, Skeleton } from '../components/ui'
 import { cn } from '../lib/cn'
+import BackButton from '../components/BackButton'
+import { AnimeCard, Card, CardGrid, CardSection, ErrorState, Pill, Poster, Score, Skeleton } from '../components/ui'
 
-function InfoRow({ label, value }: { label: string; value?: string }) {
+function InfoRow({ label, value, isLast }: { label: string; value?: string; isLast?: boolean }) {
   if (!value) return null
   return (
-    <div className="flex gap-3 py-1.5 text-sm">
-      <dt className="w-24 shrink-0 text-muted">{label}</dt>
-      <dd className="min-w-0 font-medium">{value}</dd>
-    </div>
-  )
-}
-
-function DetailSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-6 sm:flex-row">
-        <Skeleton className="aspect-[2/3] w-44 sm:w-56" />
-        <div className="flex-1 space-y-3">
-          <Skeleton className="h-10 w-3/4" />
-          <Skeleton className="h-5 w-1/2" />
-          <Skeleton className="h-24" />
-        </div>
-      </div>
-      <Skeleton className="h-64" />
+    <div className={cn('flex gap-3 py-3 text-sm', !isLast && 'border-b border-line')}>
+      <dt className="w-24 shrink-0 text-ink-muted">{label}</dt>
+      <dd className="min-w-0 flex-1 text-right font-medium text-ink">{value}</dd>
     </div>
   )
 }
@@ -48,152 +33,138 @@ export default function AnimePage() {
   const episodes = useMemo(() => {
     const asc = sortEpisodesAsc(data?.episodeList ?? [])
     const ordered = newestFirst ? [...asc].reverse() : asc
-    const f = filter.trim()
-    return f ? ordered.filter((e) => shortEpisodeLabel(e.title).toLowerCase().includes(f.toLowerCase())) : ordered
+    const f = filter.trim().toLowerCase()
+    return f ? ordered.filter((e) => shortEpisodeLabel(e.title).toLowerCase().includes(f)) : ordered
   }, [data, newestFirst, filter])
 
-  if (error) return <ErrorState error={error} onRetry={() => refetch()} />
-  if (isLoading || !data) return <DetailSkeleton />
+  if (error)
+    return (
+      <div className="space-y-4">
+        <BackButton />
+        <ErrorState error={error} onRetry={() => refetch()} />
+      </div>
+    )
+
+  if (isLoading || !data)
+    return (
+      <div className="space-y-4">
+        <BackButton />
+        <Skeleton className="h-52 rounded-[20px]" />
+        <Skeleton className="h-64 rounded-[20px]" />
+      </div>
+    )
 
   const firstEpisode = sortEpisodesAsc(data.episodeList)[0]
   const lastWatched = library.history.find((h) => h.animeId === animeId)
+  const target = lastWatched?.episodeId ?? firstEpisode?.episodeId
   const saved = isInWatchlist(animeId)
   const synopsis = data.synopsis.paragraphList.filter(Boolean)
+  const finished = /complete|tamat/i.test(data.status)
+  const info = [
+    ['Judul Jepang', data.japanese],
+    ['Tipe', data.type],
+    ['Status', data.status],
+    ['Episode', data.episodes],
+    ['Durasi', data.duration],
+    ['Tayang', data.aired],
+    ['Studio', data.studios],
+    ['Produser', data.producers],
+  ].filter(([, v]) => v)
 
   return (
-    <div className="space-y-10">
-      {/* Header */}
-      <section className="relative -mx-4 -mt-6 overflow-hidden sm:-mx-6">
-        <div className="absolute inset-0">
-          <img
-            src={data.poster}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="h-full w-full scale-110 object-cover opacity-30 blur-3xl"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/70 to-bg/30" />
-        </div>
-        <div className="relative flex flex-col gap-6 px-4 pb-6 pt-8 sm:flex-row sm:px-6 sm:pt-12">
-          <Poster
-            src={data.poster}
-            alt={data.title}
-            className="aspect-[2/3] w-40 shrink-0 self-center rounded-2xl shadow-2xl ring-1 ring-white/10 sm:w-56 sm:self-start"
-          />
-          <div className="min-w-0 flex-1 space-y-4">
-            <div>
-              <h1 className="text-2xl font-extrabold leading-tight sm:text-4xl">{data.title}</h1>
-              {data.japanese ? <p className="mt-1 text-sm text-muted">{data.japanese}</p> : null}
+    <div className="space-y-4">
+      <BackButton />
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="min-w-0 space-y-4">
+          <Card className="p-4 sm:p-5">
+            <div className="flex gap-4">
+              <Poster src={data.poster} alt={data.title} className="aspect-[3/4] w-28 rounded-[14px] sm:w-36" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl font-bold leading-snug text-ink sm:text-2xl">{data.title}</h1>
+                {data.japanese ? <p className="mt-0.5 line-clamp-1 text-sm text-ink-muted">{data.japanese}</p> : null}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {data.status ? <Pill tone={finished ? 'success' : 'primary'}>{data.status}</Pill> : null}
+                  {data.type ? <Pill tone="neutral">{data.type}</Pill> : null}
+                  <Score score={data.score} className="text-sm" />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {data.genreList.map((g) => (
+                    <Link
+                      key={g.genreId}
+                      to={`/genre/${g.genreId}`}
+                      className="text-[13px] font-medium text-primary-500 hover:underline"
+                    >
+                      #{g.title.replace(/\s+/g, '')}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs font-semibold">
-              {data.score ? (
-                <span className="inline-flex items-center gap-1 rounded-lg bg-amber-400/15 px-2.5 py-1.5 text-amber-300">
-                  <Star className="size-3.5 fill-current" /> {data.score}
-                </span>
-              ) : null}
-              {data.type ? (
-                <span className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2.5 py-1.5">
-                  <Tv className="size-3.5" /> {data.type}
-                </span>
-              ) : null}
-              {data.status ? (
-                <span
-                  className={cn(
-                    'rounded-lg px-2.5 py-1.5',
-                    /complete|tamat/i.test(data.status)
-                      ? 'bg-emerald-500/15 text-emerald-300'
-                      : 'bg-accent/15 text-accent',
-                  )}
-                >
-                  {data.status}
-                </span>
-              ) : null}
-              {data.duration ? (
-                <span className="inline-flex items-center gap-1 rounded-lg bg-surface-2 px-2.5 py-1.5">
-                  <Clock className="size-3.5" /> {data.duration}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {data.genreList.map((g) => (
+            <div className="mt-4 flex gap-3">
+              {target ? (
                 <Link
-                  key={g.genreId}
-                  to={`/genre/${g.genreId}`}
-                  className="rounded-full border border-line px-3 py-1 text-xs font-medium text-zinc-300 transition hover:border-accent hover:text-accent"
+                  to={`/nonton/${target}`}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary-500 px-5 py-3 text-[15px] font-semibold text-white active:opacity-80"
                 >
-                  {g.title}
-                </Link>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {lastWatched ? (
-                <Link
-                  to={`/nonton/${lastWatched.episodeId}`}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-5 py-3 text-sm font-bold shadow-lg shadow-accent/30 hover:brightness-110"
-                >
-                  <Play className="size-4 fill-white" /> Lanjut {shortEpisodeLabel(lastWatched.episodeTitle)}
-                </Link>
-              ) : firstEpisode ? (
-                <Link
-                  to={`/nonton/${firstEpisode.episodeId}`}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 px-5 py-3 text-sm font-bold shadow-lg shadow-accent/30 hover:brightness-110"
-                >
-                  <Play className="size-4 fill-white" /> Mulai Nonton
+                  <Play className="size-4 fill-white" />
+                  {lastWatched ? `Lanjut ${shortEpisodeLabel(lastWatched.episodeTitle)}` : 'Mulai Nonton'}
                 </Link>
               ) : null}
               <button
                 onClick={() => toggleWatchlist({ animeId, title: data.title, poster: data.poster })}
-                className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-3 text-sm font-bold hover:bg-white/20"
+                className={cn(
+                  'flex items-center justify-center gap-2 rounded-full px-5 py-3 text-[15px] font-semibold active:opacity-80',
+                  saved ? 'bg-success-50 text-success-600' : 'bg-primary-50 text-primary-600',
+                )}
               >
-                {saved ? <BookmarkCheck className="size-4 text-accent" /> : <Bookmark className="size-4" />}
-                {saved ? 'Di Koleksi' : 'Tambah ke Koleksi'}
+                {saved ? <BookmarkCheck className="size-[18px]" /> : <Bookmark className="size-[18px]" />}
+                {saved ? 'Tersimpan' : 'Simpan'}
               </button>
             </div>
-          </div>
-        </div>
-      </section>
+          </Card>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-        <div className="min-w-0 space-y-10">
           {synopsis.length > 0 ? (
-            <Section title="Sinopsis">
-              <div className={cn('space-y-3 text-sm leading-relaxed text-zinc-300', !expanded && 'line-clamp-5')}>
+            <CardSection title="Sinopsis">
+              <div className={cn('space-y-3 text-[15px] leading-relaxed text-ink-soft', !expanded && 'line-clamp-4')}>
                 {synopsis.map((p, i) => (
                   <p key={i}>{p}</p>
                 ))}
               </div>
-              <button onClick={() => setExpanded((v) => !v)} className="text-sm font-semibold text-accent">
-                {expanded ? 'Tutup' : 'Baca selengkapnya'}
+              <button onClick={() => setExpanded((v) => !v)} className="mt-2 text-sm font-semibold text-primary-500">
+                {expanded ? 'Tutup' : 'Selengkapnya'}
               </button>
-            </Section>
+            </CardSection>
           ) : null}
 
-          <Section
-            title={`Episode (${data.episodeList.length})`}
-            action={
+          <Card className="p-4 sm:p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-ink sm:text-xl">
+                Episode <span className="font-medium text-ink-muted">({data.episodeList.length})</span>
+              </h2>
               <button
                 onClick={() => setNewestFirst((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-3 py-1.5 text-xs font-semibold text-muted hover:text-white"
+                className="inline-flex items-center gap-1.5 rounded-full bg-tile px-3 py-1.5 text-[13px] font-semibold text-ink-soft active:opacity-70"
               >
                 <ArrowDownUp className="size-3.5" /> {newestFirst ? 'Terbaru' : 'Terlama'}
               </button>
-            }
-          >
+            </div>
             {data.episodeList.length > 12 ? (
-              <div className="relative max-w-xs">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+              <div className="relative mb-3">
+                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink-faint" />
                 <input
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
-                  placeholder="Cari nomor episode…"
+                  placeholder="Cari nomor episode"
                   inputMode="numeric"
-                  className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm outline-none focus:border-accent/60"
+                  className="h-10 w-full rounded-full bg-subtle pl-10 pr-4 text-sm outline-none placeholder:text-ink-faint focus:ring-2 focus:ring-primary-500/30"
                 />
               </div>
             ) : null}
             {episodes.length === 0 ? (
-              <p className="text-sm text-muted">Belum ada episode.</p>
+              <p className="py-4 text-center text-sm text-ink-muted">Belum ada episode.</p>
             ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
                 {episodes.map((e) => {
                   const watched = library.watched.includes(e.episodeId)
                   return (
@@ -202,49 +173,40 @@ export default function AnimePage() {
                       to={`/nonton/${e.episodeId}`}
                       title={e.title}
                       className={cn(
-                        'flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition',
-                        watched
-                          ? 'border-accent/30 bg-accent/10 text-zinc-300'
-                          : 'border-line bg-surface hover:border-accent/50 hover:text-accent',
+                        'flex items-center justify-center gap-1 rounded-xl px-2 py-2.5 text-sm font-semibold active:opacity-70',
+                        watched ? 'bg-success-50 text-success-600' : 'bg-subtle text-ink hover:bg-tile',
                       )}
                     >
-                      <span className="truncate">{shortEpisodeLabel(e.title)}</span>
-                      {watched ? <CheckCircle2 className="size-4 shrink-0 text-accent" /> : null}
+                      {watched ? <Check className="size-3.5" /> : null}
+                      <span className="truncate">{shortEpisodeLabel(e.title).replace('Episode ', 'Ep ')}</span>
                     </Link>
                   )
                 })}
               </div>
             )}
-            {data.batch ? (
-              <p className="text-xs text-muted">Tersedia juga versi batch (download semua episode) di sumber aslinya.</p>
-            ) : null}
-          </Section>
+          </Card>
         </div>
 
-        <aside className="h-fit rounded-2xl border border-line bg-surface p-5">
-          <h2 className="mb-2 font-bold">Informasi</h2>
-          <dl className="divide-y divide-line">
-            <InfoRow label="Judul Jepang" value={data.japanese} />
-            <InfoRow label="Tipe" value={data.type} />
-            <InfoRow label="Status" value={data.status} />
-            <InfoRow label="Episode" value={data.episodes} />
-            <InfoRow label="Durasi" value={data.duration} />
-            <InfoRow label="Tayang" value={data.aired} />
-            <InfoRow label="Studio" value={data.studios} />
-            <InfoRow label="Produser" value={data.producers} />
-            <InfoRow label="Skor" value={data.score} />
-          </dl>
-        </aside>
+        <div className="space-y-2">
+          <p className="px-1 text-xs font-semibold uppercase text-ink-faint">Informasi</p>
+          <Card className="px-4">
+            <dl>
+              {info.map(([label, value], i) => (
+                <InfoRow key={label} label={label} value={value} isLast={i === info.length - 1} />
+              ))}
+            </dl>
+          </Card>
+        </div>
       </div>
 
       {data.recommendedAnimeList.length > 0 ? (
-        <Section title="Rekomendasi Buat Kamu">
+        <CardSection title="Mirip Sama Ini">
           <CardGrid>
             {data.recommendedAnimeList.slice(0, 12).map((a) => (
               <AnimeCard key={a.animeId} animeId={a.animeId} title={a.title} poster={a.poster} />
             ))}
           </CardGrid>
-        </Section>
+        </CardSection>
       ) : null}
     </div>
   )

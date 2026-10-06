@@ -1,44 +1,71 @@
-import { Link } from 'react-router-dom'
-import { Bookmark, History, Play, Trash2, X } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
+import { Bookmark, History, X } from 'lucide-react'
 import { clearHistory, removeHistory, toggleWatchlist, useLibrary } from '../lib/library'
 import { shortEpisodeLabel } from '../lib/episodes'
-import { AnimeCard, CardGrid, EmptyState, PageHeader, Poster } from '../components/ui'
+import { timeAgo } from '../lib/time'
+import { cn } from '../lib/cn'
+import { AnimeCard, Card, CardGrid, EmptyState, PageTitle, Poster } from '../components/ui'
 
-function timeAgo(ts: number) {
-  const diff = Math.floor((Date.now() - ts) / 1000)
-  if (diff < 60) return 'baru saja'
-  if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`
-  if (diff < 86400 * 30) return `${Math.floor(diff / 86400)} hari lalu`
-  return new Date(ts).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+/** Tab Koleksi | Riwayat. */
+function LibraryTabs() {
+  const { pathname } = useLocation()
+  const tabs = [
+    { to: '/koleksi', label: 'Koleksi' },
+    { to: '/riwayat', label: 'Riwayat' },
+  ]
+  return (
+    <div className="flex rounded-full bg-tile p-1" role="tablist">
+      {tabs.map((t) => {
+        const active = pathname === t.to
+        return (
+          <Link
+            key={t.to}
+            to={t.to}
+            role="tab"
+            aria-selected={active}
+            className={cn(
+              'flex-1 rounded-full py-2 text-center text-sm font-semibold transition',
+              active ? 'bg-surface text-ink shadow-card' : 'text-ink-muted',
+            )}
+          >
+            {t.label}
+          </Link>
+        )
+      })}
+    </div>
+  )
 }
 
 export function WatchlistPage() {
   const { watchlist } = useLibrary()
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Koleksi" subtitle="Anime yang kamu simpan buat ditonton nanti. Disimpan di browser ini aja." />
+    <div className="space-y-4">
+      <PageTitle title="Koleksi" />
+      <LibraryTabs />
       {watchlist.length === 0 ? (
-        <EmptyState icon={<Bookmark className="size-8" />} title="Koleksi masih kosong">
-          Klik tombol <b>Koleksi</b> di halaman anime buat nyimpen.
+        <EmptyState icon={<Bookmark className="size-5" />} title="Koleksi masih kosong">
+          Tekan tombol <b className="text-ink">Simpan</b> di halaman anime biar muncul di sini.
         </EmptyState>
       ) : (
-        <CardGrid>
-          {watchlist.map((a) => (
-            <div key={a.animeId} className="group relative">
-              <AnimeCard animeId={a.animeId} title={a.title} poster={a.poster} />
-              <button
-                onClick={() => toggleWatchlist(a)}
-                className="absolute right-2 top-2 grid size-8 place-items-center rounded-lg bg-black/70 text-white opacity-100 backdrop-blur transition hover:bg-accent sm:opacity-0 sm:group-hover:opacity-100"
-                aria-label="Hapus dari koleksi"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          ))}
-        </CardGrid>
+        <Card className="p-4 sm:p-5">
+          <CardGrid>
+            {watchlist.map((a) => (
+              <div key={a.animeId} className="relative">
+                <AnimeCard animeId={a.animeId} title={a.title} poster={a.poster} />
+                <button
+                  onClick={() => toggleWatchlist(a)}
+                  className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-full bg-surface text-ink shadow-card active:opacity-70"
+                  aria-label={`Hapus ${a.title} dari koleksi`}
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ))}
+          </CardGrid>
+        </Card>
       )}
+      <p className="px-1 text-xs text-ink-faint">Koleksi & riwayat disimpan di browser ini aja, nggak perlu login.</p>
     </div>
   )
 }
@@ -47,55 +74,54 @@ export function HistoryPage() {
   const { history } = useLibrary()
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <PageHeader title="Riwayat Nonton" subtitle="Episode terakhir yang kamu tonton tiap anime." />
-        {history.length > 0 ? (
-          <button
-            onClick={() => {
-              if (confirm('Hapus semua riwayat nonton?')) clearHistory()
-            }}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-surface px-3 py-2 text-sm font-semibold text-muted hover:text-accent"
-          >
-            <Trash2 className="size-4" /> Hapus semua
-          </button>
-        ) : null}
-      </div>
+    <div className="space-y-4">
+      <PageTitle
+        title="Koleksi"
+        action={
+          history.length > 0 ? (
+            <button
+              onClick={() => {
+                if (confirm('Hapus semua riwayat nonton?')) clearHistory()
+              }}
+              className="text-sm font-semibold text-danger-500 active:opacity-70"
+            >
+              Hapus semua
+            </button>
+          ) : null
+        }
+      />
+      <LibraryTabs />
       {history.length === 0 ? (
-        <EmptyState icon={<History className="size-8" />} title="Belum ada riwayat">
-          Mulai nonton, nanti otomatis kecatat di sini.
+        <EmptyState icon={<History className="size-5" />} title="Belum ada riwayat">
+          Episode yang kamu tonton bakal kecatat otomatis di sini.
         </EmptyState>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {history.map((h) => (
-            <div key={h.animeId} className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-3">
-              <Link to={`/anime/${h.animeId}`} className="shrink-0">
-                <Poster src={h.poster} alt={h.animeTitle} className="aspect-[2/3] w-16 rounded-lg" />
-              </Link>
-              <div className="min-w-0 flex-1">
-                <Link to={`/anime/${h.animeId}`} className="line-clamp-1 font-semibold hover:text-accent">
-                  {h.animeTitle}
-                </Link>
-                <p className="mt-0.5 text-sm text-accent">{shortEpisodeLabel(h.episodeTitle)}</p>
-                <p className="mt-0.5 text-xs text-muted">{timeAgo(h.watchedAt)}</p>
-              </div>
-              <Link
-                to={`/nonton/${h.episodeId}`}
-                className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-white hover:brightness-110"
-                aria-label="Lanjut nonton"
-              >
-                <Play className="size-4 fill-white" />
+        <Card className="px-4">
+          {history.map((h, i) => (
+            <div
+              key={h.animeId}
+              className={cn('flex items-center gap-3 py-3', i < history.length - 1 && 'border-b border-line')}
+            >
+              <Link to={`/nonton/${h.episodeId}`} className="flex min-w-0 flex-1 items-center gap-3 active:opacity-70">
+                <Poster src={h.poster} alt={h.animeTitle} className="h-14 w-11 rounded-lg" />
+                <div className="min-w-0">
+                  <p className="line-clamp-1 text-[15px] font-semibold text-ink">{h.animeTitle}</p>
+                  <p className="mt-0.5 text-[13px] text-ink-muted">
+                    <span className="font-semibold text-primary-500">{shortEpisodeLabel(h.episodeTitle)}</span> ·{' '}
+                    {timeAgo(h.watchedAt)}
+                  </p>
+                </div>
               </Link>
               <button
                 onClick={() => removeHistory(h.animeId)}
-                className="grid size-8 shrink-0 place-items-center rounded-lg text-muted hover:text-white"
-                aria-label="Hapus dari riwayat"
+                className="grid size-8 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-subtle active:opacity-70"
+                aria-label={`Hapus ${h.animeTitle} dari riwayat`}
               >
                 <X className="size-4" />
               </button>
             </div>
           ))}
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -103,12 +129,10 @@ export function HistoryPage() {
 
 export function NotFoundPage() {
   return (
-    <div className="flex flex-col items-center gap-4 py-24 text-center">
-      <p className="text-7xl font-extrabold text-gradient">404</p>
-      <p className="text-muted">Halaman yang kamu cari nggak ada.</p>
-      <Link to="/" className="rounded-xl bg-accent px-5 py-2.5 text-sm font-bold">
-        Balik ke Beranda
+    <EmptyState icon={<span className="text-sm font-bold">404</span>} title="Halaman nggak ada">
+      <Link to="/" className="mt-2 inline-block rounded-full bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white">
+        Ke Beranda
       </Link>
-    </div>
+    </EmptyState>
   )
 }

@@ -1,38 +1,121 @@
 @import 'tailwindcss';
 
-@theme {
-  --color-bg: #0b0b12;
-  --color-surface: #13131d;
-  --color-surface-2: #1b1b28;
-  --color-line: #262636;
-  --color-muted: #8b8ba3;
-  --color-accent: #f43f5e;
-  --color-accent-2: #8b5cf6;
-  --animate-fade-in: fade-in 0.5s ease both;
-  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+/*
+ * Palet ngikutin MyWallet (wallet-custodial): header teal, aksen biru,
+ * kartu putih di atas kanvas abu muda. Nilai aslinya di variabel --c-*,
+ * jadi mode gelap cukup ganti variabelnya.
+ */
+:root {
+  --c-teal-300: #86dad4;
+  --c-teal-400: #5ecec8;
+  --c-teal-500: #3bc1bb;
+
+  --c-primary-50: #eef4ff;
+  --c-primary-100: #dce8ff;
+  --c-primary-500: #2f6bf2;
+  --c-primary-600: #2457d6;
+
+  --c-success-50: #e6f6ec;
+  --c-success-500: #1fa35b;
+  --c-success-600: #178a4b;
+
+  --c-warning-50: #fff5e6;
+  --c-warning-500: #f59e0b;
+  --c-warning-600: #b26a00;
+
+  --c-danger-50: #fdeded;
+  --c-danger-500: #e5484d;
+  --c-danger-600: #c2353a;
+
+  --c-ink: #0f172a;
+  --c-ink-soft: #334155;
+  --c-ink-muted: #64748b;
+  --c-ink-faint: #94a3b8;
+
+  --c-canvas: #f3f5f9;
+  --c-surface: #ffffff;
+  --c-subtle: #f1f4f8;
+  --c-tile: #edf2f9;
+  --c-line: #e8edf3;
+
+  --card-shadow: 0 2px 12px rgb(15 23 42 / 0.06);
+  color-scheme: light;
 }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-teal-300: #1d5c59;
+    --c-teal-400: #22716d;
+    --c-teal-500: #2a8a85;
+
+    --c-primary-50: #172648;
+    --c-primary-100: #1e315c;
+    --c-primary-500: #4a80f5;
+    --c-primary-600: #7aa3fa;
+
+    --c-success-50: #0f2e1f;
+    --c-success-500: #2cb86c;
+    --c-success-600: #5bd892;
+
+    --c-warning-50: #33250b;
+    --c-warning-500: #f5a524;
+    --c-warning-600: #f8be5c;
+
+    --c-danger-50: #3a1518;
+    --c-danger-500: #ef5a5f;
+    --c-danger-600: #ff8589;
+
+    --c-ink: #e9eef6;
+    --c-ink-soft: #c2ccdb;
+    --c-ink-muted: #8c99af;
+    --c-ink-faint: #64728a;
+
+    --c-canvas: #0b1120;
+    --c-surface: #141c2d;
+    --c-subtle: #1b2437;
+    --c-tile: #1e2940;
+    --c-line: #27324a;
+
+    --card-shadow: 0 2px 12px rgb(0 0 0 / 0.25);
+    color-scheme: dark;
   }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+}
+
+@theme inline {
+  --color-teal-300: var(--c-teal-300);
+  --color-teal-400: var(--c-teal-400);
+  --color-teal-500: var(--c-teal-500);
+  --color-primary-50: var(--c-primary-50);
+  --color-primary-100: var(--c-primary-100);
+  --color-primary-500: var(--c-primary-500);
+  --color-primary-600: var(--c-primary-600);
+  --color-success-50: var(--c-success-50);
+  --color-success-500: var(--c-success-500);
+  --color-success-600: var(--c-success-600);
+  --color-warning-50: var(--c-warning-50);
+  --color-warning-500: var(--c-warning-500);
+  --color-warning-600: var(--c-warning-600);
+  --color-danger-50: var(--c-danger-50);
+  --color-danger-500: var(--c-danger-500);
+  --color-danger-600: var(--c-danger-600);
+  --color-ink: var(--c-ink);
+  --color-ink-soft: var(--c-ink-soft);
+  --color-ink-muted: var(--c-ink-muted);
+  --color-ink-faint: var(--c-ink-faint);
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-subtle: var(--c-subtle);
+  --color-tile: var(--c-tile);
+  --color-line: var(--c-line);
+  --shadow-card: var(--card-shadow);
+  --font-sans: Roboto, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
 }
 
 @layer base {
-  html {
-    color-scheme: dark;
-  }
   body {
-    @apply bg-bg text-zinc-100 antialiased;
+    @apply bg-canvas text-ink antialiased;
     min-height: 100dvh;
-  }
-  ::selection {
-    @apply bg-accent/40;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -43,13 +126,9 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  .text-gradient {
-    @apply bg-gradient-to-r from-accent to-accent-2 bg-clip-text text-transparent;
-  }
 }
 
-/* scrollbar tipis buat panel episode */
 .thin-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-line) transparent;
+  scrollbar-color: var(--c-line) transparent;
 }
