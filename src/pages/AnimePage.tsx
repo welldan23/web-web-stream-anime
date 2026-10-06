@@ -7,6 +7,8 @@ import { shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { isInWatchlist, toggleWatchlist, useLibrary } from '../lib/library'
 import { cn } from '../lib/cn'
 import BackButton from '../components/BackButton'
+import { AniListBanner, AniListStats, Characters, ExternalLinks, NextEpisode, Trailer } from '../components/AniList'
+import { findAniList, seasonLabel } from '../lib/anilist'
 import Seo from '../components/Seo'
 import { ApiError } from '../lib/api'
 import { animeMeta, pageTitle, titleFromSlug, DEFAULT_DESCRIPTION } from '../lib/site'
@@ -28,6 +30,14 @@ export default function AnimePage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['anime', animeId],
     queryFn: () => api.anime(animeId),
+  })
+  // data tambahan dari AniList; kalau gagal/nggak ketemu, halaman tetap jalan tanpa bagian ini
+  const { data: al } = useQuery({
+    queryKey: ['anilist', animeId],
+    queryFn: () => findAniList(animeId, data!.title, data!.japanese),
+    enabled: Boolean(data),
+    staleTime: 1000 * 60 * 60 * 6,
+    retry: 1,
   })
   const library = useLibrary()
   const [newestFirst, setNewestFirst] = useState(false)
@@ -75,16 +85,18 @@ export default function AnimePage() {
   const saved = isInWatchlist(animeId)
   const synopsis = data.synopsis.paragraphList.filter(Boolean)
   const finished = /complete|tamat/i.test(data.status)
-  const info = [
+  const infoRows: [string, string | undefined][] = [
     ['Judul Jepang', data.japanese],
     ['Tipe', data.type],
     ['Status', data.status],
     ['Episode', data.episodes],
     ['Durasi', data.duration],
     ['Tayang', data.aired],
-    ['Studio', data.studios],
+    ['Musim', al ? (seasonLabel(al) ?? undefined) : undefined],
+    ['Studio', data.studios || al?.studios.nodes.map((s) => s.name).join(', ')],
     ['Produser', data.producers],
-  ].filter(([, v]) => v)
+  ]
+  const info = infoRows.filter((row): row is [string, string] => Boolean(row[1]))
 
   return (
     <div className="space-y-4">
@@ -94,6 +106,7 @@ export default function AnimePage() {
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="min-w-0 space-y-4">
           <Card className="p-4 sm:p-5">
+            {al ? <AniListBanner media={al} title={data.title} /> : null}
             <div className="flex gap-4">
               <Poster src={data.poster} alt={data.title} className="aspect-[3/4] w-28 rounded-[14px] sm:w-36" />
               <div className="min-w-0 flex-1">
@@ -140,6 +153,9 @@ export default function AnimePage() {
             </div>
           </Card>
 
+          {al ? <NextEpisode media={al} /> : null}
+          {al ? <AniListStats media={al} /> : null}
+
           {synopsis.length > 0 ? (
             <CardSection title="Sinopsis">
               <div className={cn('space-y-3 text-[15px] leading-relaxed text-ink-soft', !expanded && 'line-clamp-4')}>
@@ -152,6 +168,8 @@ export default function AnimePage() {
               </button>
             </CardSection>
           ) : null}
+
+          {al ? <Trailer media={al} title={data.title} /> : null}
 
           <Card className="p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -201,6 +219,8 @@ export default function AnimePage() {
               </div>
             )}
           </Card>
+
+          {al ? <Characters media={al} /> : null}
         </div>
 
         <div className="space-y-2">
@@ -212,6 +232,11 @@ export default function AnimePage() {
               ))}
             </dl>
           </Card>
+          {al ? (
+            <div className="pt-2">
+              <ExternalLinks media={al} />
+            </div>
+          ) : null}
         </div>
       </div>
 
