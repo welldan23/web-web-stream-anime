@@ -38,15 +38,15 @@ export function flattenServers(qualities: Quality[]): ServerOption[] {
 }
 
 /**
- * Urutan server andalan buat dicoba otomatis: pilihan terakhir user dulu,
- * lalu urutan RELIABLE_SERVERS, dengan kualitas 720p → 480p → 360p.
+ * Urutan server andalan buat dicoba otomatis: pilihan terakhir user dulu;
+ * kalau blokir pop-up nyala, server yang mau di-sandbox didahulukan;
+ * lalu kualitas 720p → 480p → 360p dan urutan RELIABLE_SERVERS.
  */
-export function autoCandidates(options: ServerOption[]): ServerOption[] {
+export function autoCandidates(options: ServerOption[], blockPopups = false): ServerOption[] {
   const pref = readPref()
-  const serverRank = (o: ServerOption) => {
-    const i = RELIABLE_SERVERS.indexOf(o.reliable ?? '')
-    return o.reliable === pref.server ? -1 : i
-  }
+  const prefRank = (o: ServerOption) => (pref.server && o.reliable === pref.server ? 0 : 1)
+  const sandboxRank = (o: ServerOption) => (blockPopups && !canSandbox(o) ? 1 : 0)
+  const serverRank = (o: ServerOption) => RELIABLE_SERVERS.indexOf(o.reliable ?? '')
   const qualityRank = (o: ServerOption) => {
     if (o.quality === pref.quality) return -1
     const i = QUALITY_ORDER.indexOf(o.quality)
@@ -54,7 +54,13 @@ export function autoCandidates(options: ServerOption[]): ServerOption[] {
   }
   return options
     .filter((o) => o.reliable)
-    .sort((a, b) => qualityRank(a) - qualityRank(b) || serverRank(a) - serverRank(b))
+    .sort(
+      (a, b) =>
+        prefRank(a) - prefRank(b) ||
+        sandboxRank(a) - sandboxRank(b) ||
+        qualityRank(a) - qualityRank(b) ||
+        serverRank(a) - serverRank(b),
+    )
 }
 
 /** Simpan pilihan user biar episode berikutnya langsung pakai server & kualitas yang sama. */
@@ -89,6 +95,20 @@ export function serverLabel(o: ServerOption) {
 // makanya bisa dimatiin user.
 
 const BLOCK_KEY = 'animeku:block-popups'
+
+/**
+ * Server yang nolak muter kalau iframe-nya di-sandbox
+ * (Vidhide nampilin "This video is not available due to sandboxed iframe!").
+ * Buat server ini blokir pop-up otomatis dimatiin biar videonya tetap jalan.
+ */
+export const NO_SANDBOX_SERVERS = ['vidhide']
+
+/** `undefined` = player bawaan (server nggak diketahui), dianggap boleh di-sandbox. */
+export function canSandbox(option: Pick<ServerOption, 'title'> | undefined) {
+  if (!option) return true
+  const title = option.title.toLowerCase()
+  return !NO_SANDBOX_SERVERS.some((name) => title.includes(name))
+}
 
 /** Izin buat iframe yang di-sandbox: video tetap jalan, tapi nggak boleh buka pop-up / pindah halaman. */
 export const PLAYER_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-presentation allow-orientation-lock allow-pointer-lock'

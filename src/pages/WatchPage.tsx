@@ -5,6 +5,7 @@ import { ArrowLeft, Check, ChevronLeft, ChevronRight, ChevronDown, ExternalLink,
 import { api } from '../lib/api'
 import {
   autoCandidates,
+  canSandbox,
   flattenServers,
   PLAYER_SANDBOX,
   readBlockPopups,
@@ -32,7 +33,6 @@ export default function WatchPage() {
   const library = useLibrary()
   // server yang dipilih manual, diikat ke episode-nya; 'default' = player bawaan otakudesu
   const [picked, setPicked] = useState<{ episodeId: string; serverId: string } | null>(null)
-  const [blockPopups, setBlockPopups] = useState(readBlockPopups)
   const activeEpisodeRef = useRef<HTMLAnchorElement>(null)
 
   const episode = useQuery({ queryKey: ['episode', episodeId], queryFn: () => api.episode(episodeId) })
@@ -45,7 +45,8 @@ export default function WatchPage() {
 
   const ep = episode.data
   const options = useMemo(() => flattenServers(ep?.server.qualityList ?? []), [ep])
-  const candidates = useMemo(() => autoCandidates(options), [options])
+  const [blockPopups, setBlockPopups] = useState(readBlockPopups)
+  const candidates = useMemo(() => autoCandidates(options, blockPopups), [options, blockPopups])
   const manual = picked?.episodeId === episodeId ? picked.serverId : null
 
   // Otomatis: coba server andalan satu per satu sampai ada yang ngasih link
@@ -141,6 +142,9 @@ export default function WatchPage() {
   const reliable = sortForDisplay(options.filter((o) => o.reliable))
   const others = options.filter((o) => !o.reliable)
   const activeOption = options.find((o) => o.serverId === activeServer)
+  // sebagian server (Vidhide) nolak muter kalau di-sandbox, jadi blokir pop-up dilewati buat server itu
+  const sandboxed = blockPopups && canSandbox(activeOption)
+  const sandboxSkipped = blockPopups && !sandboxed && activeOption
   const downloads = ep?.download.qualityList.filter((q) => q.urlList && q.urlList.length > 0) ?? []
   const epNumber = ep ? episodeNumber(ep.title) : null
 
@@ -169,10 +173,10 @@ export default function WatchPage() {
             ) : src ? (
               <iframe
                 // key ikut status blokir: atribut sandbox cuma kebaca waktu iframe dibuat ulang
-                key={`${src}|${blockPopups}`}
+                key={`${src}|${sandboxed}`}
                 src={src}
                 title={ep?.title ?? 'Player'}
-                sandbox={blockPopups ? PLAYER_SANDBOX : undefined}
+                sandbox={sandboxed ? PLAYER_SANDBOX : undefined}
                 allowFullScreen
                 allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
                 referrerPolicy="no-referrer"
@@ -281,6 +285,12 @@ export default function WatchPage() {
                 />
               </label>
             </Card>
+            {sandboxSkipped ? (
+              <Notice>
+                {serverLabel(sandboxSkipped)} nolak muter kalau pop-up diblokir, jadi buat server ini blokirnya
+                dilewatin. Pilih server lain kalau mau bebas pop-up.
+              </Notice>
+            ) : null}
             <p className="px-1 text-xs text-ink-muted">
               Iklan yang tampil di dalam video berasal dari server videonya, jadi nggak bisa dihapus dari sini.
             </p>
