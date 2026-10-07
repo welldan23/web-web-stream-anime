@@ -80,6 +80,15 @@ class HttpError extends Error {
   }
 }
 
+/** Semua sumber info episode gagal; nggak di-cache biar dicoba lagi nanti. */
+class SourcesError extends Error {
+  failed: string[]
+  constructor(failed: string[]) {
+    super('semua sumber info episode gagal')
+    this.failed = failed
+  }
+}
+
 /** Judul pengganti kayak "Episode 5" dianggap kosong. */
 const realName = (name?: string | null) =>
   name && !/^(episode|episodio|épisode|ep\.?)\s*\d+$/i.test(name.trim()) ? name.trim() : null
@@ -96,7 +105,7 @@ export function createMeta(options: MetaOptions = {}) {
   const tmdbKey = options.tmdbKey ?? ''
   const allowed = createLimiter()
   const idsCache = createCache<AnimeIds | null>(24 * 3600_000)
-  const episodesCache = createCache<{ episodes: EpisodeInfo[]; sources: Source[] }>(12 * 3600_000)
+  const episodesCache = createCache<{ episodes: EpisodeInfo[]; sources: Source[]; failed: string[] }>(12 * 3600_000)
 
   async function getJson<T>(url: string, init: RequestInit = {}) {
     const res = await fetch(url, {
@@ -252,17 +261,15 @@ export function createMeta(options: MetaOptions = {}) {
 
   function episodeInfo(anilistId: number) {
     return episodesCache(String(anilistId), async () => {
-      const [al, ids] = await Promise.all([
-        anilist(anilistId).catch(() => null),
-        animeIds(anilistId).catch(() => null),
-      ])
-      const malId = al?.malId ?? ids?.myanimelist ?? null
-      let failed = !al
+      // sumber yang error dicatat biar gampang dicek: buka /_animeku/meta/episodes/<id> di browser
+      const failed: string[] = []
       const fail = (name: string) => (error: unknown) => {
-        failed = true
+        failed.push(`${name}: ${error instanceof Error ? error.message : String(error)}`)
         console.error(`[meta] ${name} ${anilistId}:`, error instanceof Error ? error.message : error)
         return null
       }
+      const [al, ids] = await Promise.all([anilist(anilistId).catch(fail('anilist')), animeIds(anilistId).catch(fail('animeapi'))])
+      const malId = al?.malId ?? ids?.myanimelist ?? null
       const [fromTmdb, fromJikan, fromKitsu] = await Promise.all([
         ids ? tmdbEpisodes(ids, al?.count ?? null).catch(fail('tmdb')) : null,
         malId ? jikan(malId).catch(fail('jikan')) : null,
@@ -300,8 +307,8 @@ export function createMeta(options: MetaOptions = {}) {
           recap: pick(n, 'recap', ['jikan']) ?? false,
         }))
       // semua sumber gagal (mis. internet VPS putus) → jangan di-cache kosong 12 jam
-      if (episodes.length === 0 && failed) throw new Error('semua sumber info episode gagal')
-      return { episodes, sources: (['tmdb', 'jikan', 'anilist', 'kitsu'] as Source[]).filter((s) => used.has(s)) }
+      if (episodes.length === 0 && failed.length > 0) throw new SourcesError(failed)
+      return { episodes, sources: (['tmdb', 'jikan', 'anilist', 'kitsu'] as Source[]).filter((s) => used.has(s)), failed }
     })
   }
 
@@ -320,7 +327,8 @@ export function createMeta(options: MetaOptions = {}) {
       return json(res, 404, { message: 'Nggak ada.' })
     } catch (error) {
       console.error('[meta]', url.pathname, error instanceof Error ? error.message : error)
-      return json(res, 502, { message: 'Sumber data lagi nggak bisa dihubungi.' })
+      const failed = error instanceof SourcesError ? error.failed : undefined
+      return json(res, 502, { message: 'Sumber data lagi nggak bisa dihubungi.', failed })
     }
   }
 
