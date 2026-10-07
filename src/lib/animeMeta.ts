@@ -57,9 +57,73 @@ async function get<T>(path: string): Promise<T | null> {
 export const getAnimeIds = (anilistId: number) =>
   get<{ ids: AnimeIds | null }>(`/ids/${anilistId}`).then((r) => r?.ids ?? null)
 
+export interface EpisodeInfoResult {
+  episodes: EpisodeInfo[]
+  sources: EpisodeSource[]
+  /** sumber yang gagal di server, mis. "jikan: fetch failed (ETIMEDOUT)" */
+  failed?: string[]
+  malId?: number | null
+}
+
 /** Info tiap episode, digabung dari TMDB, MyAnimeList, AniList & Kitsu di server. */
-export const getEpisodeInfo = (anilistId: number) =>
-  get<{ episodes: EpisodeInfo[]; sources: EpisodeSource[] }>(`/episodes/${anilistId}`)
+export const getEpisodeInfo = (anilistId: number) => get<EpisodeInfoResult>(`/episodes/${anilistId}`)
+
+const JIKAN_URL = 'https://api.jikan.moe/v4'
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+export type JikanEpisode = { number: number; name: string | null; airDate: string | null; filler: boolean; recap: boolean }
+
+/**
+ * Cadangan: ambil judul + filler/recap langsung dari Jikan lewat browser,
+ * dipakai kalau server nggak bisa nyambung ke Jikan (mis. IP VPS diblokir).
+ */
+export async function getJikanEpisodes(malId: number): Promise<JikanEpisode[] | null> {
+  const out: JikanEpisode[] = []
+  for (let page = 1; page <= 15; page++) {
+    let body: {
+      data: { mal_id: number; title: string | null; aired: string | null; filler: boolean; recap: boolean }[]
+      pagination: { has_next_page: boolean }
+    } | null = null
+    for (let attempt = 0; attempt < 3 && !body; attempt++) {
+      try {
+        const res = await fetch(`${JIKAN_URL}/anime/${malId}/episodes?page=${page}`)
+        if (res.ok) body = await res.json()
+        else if (res.status !== 429 && res.status < 500) return out.length ? out : null
+      } catch {
+        // jaringan putus sebentar, coba lagi
+      }
+      if (!body) await sleep(1500 * (attempt + 1))
+    }
+    if (!body) return out.length ? out : null
+    for (const e of body.data) {
+      out.push({
+        number: e.mal_id,
+        name: e.title && !/^episode\s*\d+$/i.test(e.title.trim()) ? e.title.trim() : null,
+        airDate: e.aired?.slice(0, 10) ?? null,
+        filler: e.filler,
+        recap: e.recap,
+      })
+    }
+    if (!body.pagination.has_next_page) break
+    await sleep(400) // batas Jikan ±3 request/detik
+  }
+  return out
+}
+
+/** Gabungin data Jikan dari browser ke hasil server (judul cuma ngisi yang kosong). */
+export function mergeJikan(info: EpisodeInfoResult, jikan: JikanEpisode[]): EpisodeInfoResult {
+  const byNumber = new Map(info.episodes.map((e) => [e.number, e]))
+  for (const j of jikan) {
+    const e = byNumber.get(j.number)
+    if (e) {
+      byNumber.set(j.number, { ...e, name: e.name ?? j.name, airDate: e.airDate ?? j.airDate, filler: j.filler, recap: j.recap })
+    } else {
+      byNumber.set(j.number, { number: j.number, name: j.name, overview: null, still: null, stills: [], airDate: j.airDate, filler: j.filler, recap: j.recap })
+    }
+  }
+  const sources: EpisodeSource[] = info.sources.includes('jikan') ? info.sources : ['jikan', ...info.sources]
+  return { ...info, episodes: [...byNumber.values()].sort((a, b) => a.number - b.number), sources }
+}
 
 export interface SiteLink {
   label: string

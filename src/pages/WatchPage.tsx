@@ -20,7 +20,8 @@ import { track } from '../lib/stats'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { findOploverz } from '../lib/oploverz'
 import { findAniList } from '../lib/anilist'
-import { getEpisodeInfo, SOURCE_LABEL, type EpisodeInfo } from '../lib/animeMeta'
+import { SOURCE_LABEL, type EpisodeInfo } from '../lib/animeMeta'
+import { useEpisodeInfo } from '../lib/useEpisodeInfo'
 import { cn } from '../lib/cn'
 import Seo from '../components/Seo'
 import { DEFAULT_DESCRIPTION, episodeMeta, pageTitle, titleFromSlug } from '../lib/site'
@@ -63,13 +64,7 @@ export default function WatchPage() {
     staleTime: 1000 * 60 * 60 * 6,
     retry: 1,
   })
-  const { data: episodeInfo } = useQuery({
-    queryKey: ['episode-info', al?.id],
-    queryFn: () => getEpisodeInfo(al!.id),
-    enabled: Boolean(al),
-    staleTime: 1000 * 60 * 60 * 6,
-    retry: false,
-  })
+  const episodeInfo = useEpisodeInfo(al?.id)
   const infoFor = (n: number | null) => (n === null ? undefined : episodeInfo?.episodes.find((t) => t.number === n))
   const currentInfo = infoFor(epNumber)
   // kalau gambar-gambar awal gagal semua (link mati), kolom gambar disembunyiin aja

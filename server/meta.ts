@@ -11,8 +11,13 @@
 //       sinopsis                    → Kitsu
 //       TMDB (kalau ada TMDB_API_KEY) dipakai duluan karena ada bahasa Indonesianya.
 //     Sumber yang error/kosong dilewati aja.
+import { setDefaultResultOrder } from 'node:dns'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { clientIp, createCache, createLimiter, json, SERVER_PREFIX, type Next } from './http.ts'
+
+// Banyak VPS punya IPv6 yang setengah jalan: koneksi lewat IPv6 ngegantung sampai ETIMEDOUT
+// (kejadian ke api.jikan.moe). Pakai alamat IPv4 duluan.
+setDefaultResultOrder('ipv4first')
 
 const PREFIX = `${SERVER_PREFIX}/meta`
 const TMDB_IMAGE = 'https://image.tmdb.org/t/p/w300'
@@ -117,7 +122,7 @@ export function createMeta(options: MetaOptions = {}) {
   const allowed = createLimiter()
   const idsCache = createCache<AnimeIds | null>(24 * 3600_000)
   // hasil lengkap disimpan 12 jam; kalau ada sumber yang error, cuma 20 menit biar cepet dicoba lagi
-  const episodesCache = createCache<{ episodes: EpisodeInfo[]; sources: Source[]; failed: string[] }>((result) =>
+  const episodesCache = createCache<{ episodes: EpisodeInfo[]; sources: Source[]; failed: string[]; malId: number | null }>((result) =>
     result.failed.length > 0 ? 20 * 60_000 : 12 * 3600_000,
   )
 
@@ -353,7 +358,9 @@ export function createMeta(options: MetaOptions = {}) {
         })
       // semua sumber gagal (mis. internet VPS putus) → jangan di-cache kosong 12 jam
       if (episodes.length === 0 && failed.length > 0) throw new SourcesError(failed)
-      return { episodes, sources: (['tmdb', 'jikan', 'anilist', 'kitsu'] as Source[]).filter((s) => used.has(s)), failed }
+      const sources = (['tmdb', 'jikan', 'anilist', 'kitsu'] as Source[]).filter((s) => used.has(s))
+      // malId dikirim biar browser bisa ambil data Jikan sendiri kalau dari server gagal
+      return { episodes, sources, failed, malId }
     })
   }
 

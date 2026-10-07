@@ -10,7 +10,8 @@ import BackButton from '../components/BackButton'
 import { AnimeFactCard } from '../components/AnimeFacts'
 import { AniListBanner, AniListStats, Characters, ExternalLinks, NextEpisode, Trailer } from '../components/AniList'
 import { findAniList, seasonLabel } from '../lib/anilist'
-import { databaseLinks, getAnimeIds, getEpisodeInfo } from '../lib/animeMeta'
+import { databaseLinks, getAnimeIds } from '../lib/animeMeta'
+import { useEpisodeInfo } from '../lib/useEpisodeInfo'
 import Seo from '../components/Seo'
 import { ApiError } from '../lib/api'
 import { animeMeta, pageTitle, titleFromSlug, DEFAULT_DESCRIPTION } from '../lib/site'
@@ -50,13 +51,7 @@ export default function AnimePage() {
     retry: false,
   })
   // tanda filler/recap per episode (key sama kayak di halaman nonton biar ke-cache)
-  const { data: episodeInfo } = useQuery({
-    queryKey: ['episode-info', al?.id],
-    queryFn: () => getEpisodeInfo(al!.id),
-    enabled: Boolean(al),
-    staleTime: 1000 * 60 * 60 * 6,
-    retry: false,
-  })
+  const episodeInfo = useEpisodeInfo(al?.id)
   const skippable = useMemo(
     () =>
       new Map(
