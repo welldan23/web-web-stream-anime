@@ -212,7 +212,7 @@ export default function WatchPage() {
         <Skeleton className="h-8 w-48" />
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-4">
           <div className="relative aspect-video overflow-hidden rounded-[20px] bg-black">
             {playerLoading ? (
@@ -379,7 +379,7 @@ export default function WatchPage() {
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <GroupTitle>Daftar episode ({episodes.length})</GroupTitle>
           <Card className="overflow-hidden">
             <div className="thin-scroll relative max-h-[420px] overflow-y-auto lg:max-h-[calc(100dvh-160px)]">

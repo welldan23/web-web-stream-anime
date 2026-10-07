@@ -101,7 +101,8 @@ export default function AnimePage() {
       </div>
     )
 
-  const firstEpisode = sortEpisodesAsc(data.episodeList)[0]
+  const allEpisodes = sortEpisodesAsc(data.episodeList)
+  const firstEpisode = allEpisodes[0]
   const lastWatched = library.history.find((h) => h.animeId === animeId)
   const target = lastWatched?.episodeId ?? firstEpisode?.episodeId
   const saved = isInWatchlist(animeId)
@@ -198,7 +199,7 @@ export default function AnimePage() {
           <Card className="p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-ink sm:text-xl">
-                Episode <span className="font-medium text-ink-muted">({data.episodeList.length})</span>
+                Episode <span className="font-medium text-ink-muted">({allEpisodes.length})</span>
               </h2>
               <button
                 onClick={() => setNewestFirst((v) => !v)}
@@ -207,7 +208,7 @@ export default function AnimePage() {
                 <ArrowDownUp className="size-3.5" /> {newestFirst ? 'Terbaru' : 'Terlama'}
               </button>
             </div>
-            {data.episodeList.length > 12 ? (
+            {allEpisodes.length > 12 ? (
               <div className="relative mb-3">
                 <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink-faint" />
                 <input
