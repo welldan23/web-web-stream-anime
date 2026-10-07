@@ -7,7 +7,7 @@
 // Pengaturan dibaca dari environment atau file .env:
 //   PORT (4173), HOST (0.0.0.0), API_PROXY_TARGET (http://localhost:3001),
 //   VITE_SITE_URL, ADMIN_PASSWORD, STATS_FILE (data/stats.json), STATS_TZ (Asia/Jakarta),
-//   TMDB_API_KEY (judul & gambar episode)
+//   TMDB_API_KEY (opsional: info episode bahasa Indonesia)
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
@@ -36,7 +36,14 @@ const stats = createStats({
   timeZone: env.STATS_TZ,
   githubRepo: env.GITHUB_REPO,
 })
-const meta = createMeta({ tmdbKey: env.TMDB_API_KEY, animeApiUrl: env.ANIMEAPI_URL, tmdbUrl: env.TMDB_API_URL })
+const meta = createMeta({
+  tmdbKey: env.TMDB_API_KEY,
+  animeApiUrl: env.ANIMEAPI_URL,
+  tmdbUrl: env.TMDB_API_URL,
+  anilistUrl: env.ANILIST_URL,
+  jikanUrl: env.JIKAN_URL,
+  kitsuUrl: env.KITSU_URL,
+})
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

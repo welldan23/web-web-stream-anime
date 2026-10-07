@@ -18,7 +18,11 @@ Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wa
 - **Fakta anime**: "Fakta Anime Hari Ini" di beranda & "Tahukah kamu?" di halaman detail (One Piece, Naruto, Demon Slayer, AoT, JJK, HxH, Dragon Ball, dll). Data dari [AnimeFacts](https://github.com/chandan-02/anime-facts-rest-api) (MIT), diterjemahin & disaring, disimpan di `src/data/animeFacts.ts` karena server API aslinya udah mati
 - **Data dari situs lain** (lewat server Animeku, `server/meta.ts`):
   - Link ke database anime lain di halaman detail. Sumbernya [AnimeAPI](https://animeapi.my.id), termasuk database Indonesia OtakOtaku dan SilverYasha.
-  - Judul, sinopsis, dan gambar tiap episode di halaman nonton. Sumbernya [TMDB](https://www.themoviedb.org) dan butuh `TMDB_API_KEY`. Kalau jumlah episode di TMDB nggak cocok sama AniList (misalnya dua cour digabung), datanya nggak dipakai biar nomor episodenya nggak meleset.
+  - **Info tiap episode** di halaman nonton: judul, sinopsis, gambar, plus tanda **Filler/Recap** (juga muncul di daftar episode halaman detail). Datanya digabung dari beberapa sumber gratis tanpa daftar:
+    - judul + tanda filler/recap dari MyAnimeList lewat [Jikan](https://jikan.moe)
+    - gambar dari AniList (Crunchyroll dkk), kalau nggak ada dari [Kitsu](https://kitsu.app)
+    - sinopsis dari Kitsu
+  - Kalau `TMDB_API_KEY` diisi, [TMDB](https://www.themoviedb.org) dipakai duluan karena ada bahasa Indonesianya. Datanya nggak dipakai kalau jumlah episode di TMDB nggak cocok sama AniList (misalnya dua cour digabung), biar nomor episodenya nggak meleset.
 - **Koleksi** (watchlist) dan **Riwayat** — disimpan di browser (localStorage), nggak perlu login
 - **Dashboard admin** (`/admin`, pakai password): statistik pengunjung, episode ditonton, pencarian, pengguna aplikasi & download APK, grafik per hari, anime & kata kunci terpopuler (lihat "Jalanin di VPS")
 - Responsif: menu pil di header, navigasi bawah di HP
@@ -80,10 +84,10 @@ PORT=4173                                  # sama kayak vite preview, jadi Caddy
 API_PROXY_TARGET=http://localhost:3001     # alamat wajik
 VITE_SITE_URL=https://srv1977175.hstgr.cloud
 ADMIN_PASSWORD=ganti-pakai-password-panjang
-TMDB_API_KEY=                              # opsional: judul, sinopsis & gambar tiap episode
+TMDB_API_KEY=                              # opsional: info episode bahasa Indonesia dari TMDB
 ```
 
-`TMDB_API_KEY` itu gratis. Caranya: daftar di [themoviedb.org](https://www.themoviedb.org), masuk ke **Settings → API**, terus bikin key tipe *Developer*. Bisa pakai "API Key" yang pendek atau "Read Access Token" yang panjang. Kalau dikosongin, halaman nonton tetap jalan, cuma tanpa judul dan gambar episode.
+`TMDB_API_KEY` itu gratis. Caranya: daftar di [themoviedb.org](https://www.themoviedb.org), masuk ke **Settings → API**, terus bikin key tipe *Developer*. Bisa pakai "API Key" yang pendek atau "Read Access Token" yang panjang. Kalau dikosongin, info episode tetap muncul dari MyAnimeList, AniList, dan Kitsu, cuma pakai bahasa Inggris.
 
 Matiin `vite preview` yang lama, terus jalanin server barunya pakai pm2 biar tetap nyala walau terminal ditutup:
 

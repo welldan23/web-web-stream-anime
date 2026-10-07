@@ -20,7 +20,7 @@ import { track } from '../lib/stats'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { findOploverz } from '../lib/oploverz'
 import { findAniList } from '../lib/anilist'
-import { getTmdbEpisodes } from '../lib/animeMeta'
+import { getEpisodeInfo, SOURCE_LABEL, type EpisodeInfo } from '../lib/animeMeta'
 import { cn } from '../lib/cn'
 import Seo from '../components/Seo'
 import { DEFAULT_DESCRIPTION, episodeMeta, pageTitle, titleFromSlug } from '../lib/site'
@@ -55,7 +55,7 @@ export default function WatchPage() {
     enabled: Boolean(animeId),
   })
   const epNumber = ep ? episodeNumber(ep.title) : null
-  // judul, sinopsis & gambar episode dari TMDB (kalau ada); key-nya sama kayak di halaman detail biar ke-cache
+  // judul, sinopsis, gambar & tanda filler tiap episode; key AniList sama kayak di halaman detail biar ke-cache
   const { data: al } = useQuery({
     queryKey: ['anilist', animeId],
     queryFn: () => findAniList(animeId!, anime.data!.title, anime.data!.japanese),
@@ -63,16 +63,16 @@ export default function WatchPage() {
     staleTime: 1000 * 60 * 60 * 6,
     retry: 1,
   })
-  const { data: tmdbEpisodes } = useQuery({
-    queryKey: ['tmdb-episodes', al?.id, al?.episodes],
-    queryFn: () => getTmdbEpisodes(al!.id, al!.episodes),
+  const { data: episodeInfo } = useQuery({
+    queryKey: ['episode-info', al?.id],
+    queryFn: () => getEpisodeInfo(al!.id),
     enabled: Boolean(al),
     staleTime: 1000 * 60 * 60 * 6,
     retry: false,
   })
-  const tmdbFor = (n: number | null) => (n === null ? undefined : tmdbEpisodes?.find((t) => t.number === n))
-  const tmdbEp = tmdbFor(epNumber)
-  const hasStills = Boolean(tmdbEpisodes?.some((t) => t.still))
+  const infoFor = (n: number | null) => (n === null ? undefined : episodeInfo?.episodes.find((t) => t.number === n))
+  const currentInfo = infoFor(epNumber)
+  const hasStills = Boolean(episodeInfo?.episodes.some((t) => t.still))
   const animeTitle = anime.data?.title
   const manual = picked?.episodeId === episodeId ? picked.serverId : null
 
@@ -249,7 +249,7 @@ export default function WatchPage() {
                   {ep.releaseTime ? ` · ${ep.releaseTime}` : ''}
                 </p>
                 <h1 className="mt-0.5 text-lg font-bold leading-snug text-ink sm:text-xl">{ep.title}</h1>
-                {tmdbEp?.name || tmdbEp?.overview ? <EpisodeAbout key={episodeId} name={tmdbEp.name} overview={tmdbEp.overview} /> : null}
+                {currentInfo ? <EpisodeAbout key={episodeId} info={currentInfo} /> : null}
               </>
             ) : (
               <Skeleton className="h-12" />
@@ -391,7 +391,7 @@ export default function WatchPage() {
                 : episodes.map((e, i) => {
                     const active = e.episodeId === episodeId
                     const watched = library.watched.includes(e.episodeId)
-                    const info = tmdbFor(episodeNumber(e.title))
+                    const info = infoFor(episodeNumber(e.title))
                     return (
                       <Link
                         key={e.episodeId}
@@ -421,6 +421,11 @@ export default function WatchPage() {
                             <span className="block truncate text-xs font-normal text-ink-muted">{info.name}</span>
                           ) : null}
                         </span>
+                        {info?.filler || info?.recap ? (
+                          <Pill tone="warning" className="shrink-0">
+                            {info.filler ? 'Filler' : 'Recap'}
+                          </Pill>
+                        ) : null}
                         {active ? (
                           <Pill>Diputar</Pill>
                         ) : watched ? (
@@ -431,6 +436,12 @@ export default function WatchPage() {
                   })}
             </div>
           </Card>
+          {episodeInfo?.sources.length ? (
+            <p className="px-1 text-[11px] leading-relaxed text-ink-faint">
+              Info episode dari {episodeInfo.sources.map((s) => SOURCE_LABEL[s]).join(', ')}.
+              {episodeInfo.sources.includes('tmdb') ? ' This product uses the TMDB API but is not endorsed or certified by TMDB.' : ''}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>
@@ -464,15 +475,22 @@ function EpisodeNav({ to, dir }: { to?: string; dir: 'prev' | 'next' }) {
   )
 }
 
-/** Judul & sinopsis episode dari TMDB, sinopsis bisa dibuka-tutup. */
-function EpisodeAbout({ name, overview }: { name: string | null; overview: string | null }) {
+/** Judul, sinopsis & tanda filler episode yang lagi diputar; sinopsis bisa dibuka-tutup. */
+function EpisodeAbout({ info }: { info: EpisodeInfo }) {
   const [open, setOpen] = useState(false)
+  if (!info.name && !info.overview && !info.filler && !info.recap) return null
   return (
     <div className="mt-2 space-y-1">
-      {name ? <p className="text-[15px] font-semibold text-ink-soft">“{name}”</p> : null}
-      {overview ? (
+      {info.name || info.filler || info.recap ? (
+        <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-ink-soft">
+          {info.name ? <span>“{info.name}”</span> : null}
+          {info.filler ? <Pill tone="warning">Filler · boleh di-skip</Pill> : null}
+          {info.recap ? <Pill tone="warning">Recap · rangkuman</Pill> : null}
+        </p>
+      ) : null}
+      {info.overview ? (
         <>
-          <p className={cn('text-sm leading-relaxed text-ink-muted', !open && 'line-clamp-2')}>{overview}</p>
+          <p className={cn('text-sm leading-relaxed text-ink-muted', !open && 'line-clamp-2')}>{info.overview}</p>
           <button onClick={() => setOpen((v) => !v)} className="text-xs font-semibold text-primary-500">
             {open ? 'Tutup' : 'Selengkapnya'}
           </button>

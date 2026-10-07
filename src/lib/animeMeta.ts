@@ -1,5 +1,5 @@
 // Data tambahan lewat server Animeku (server/meta.ts):
-// ID anime di situs lain (AnimeAPI) dan judul/gambar episode (TMDB).
+// ID anime di situs lain (AnimeAPI) dan info tiap episode (TMDB, MyAnimeList, AniList, Kitsu).
 // Kalau server-nya nggak ada (mis. deploy Vercel) atau sumbernya error,
 // semua fungsi di sini balikin null dan halaman tetap jalan tanpa data ini.
 import { SERVER_URL } from './server'
@@ -22,12 +22,24 @@ export interface AnimeIds {
   trakt_type: 'shows' | 'movies' | null
 }
 
-export interface TmdbEpisode {
+export interface EpisodeInfo {
   number: number
   name: string | null
   overview: string | null
   still: string | null
   airDate: string | null
+  /** episode filler (cerita di luar manga) / recap (rangkuman), dari MyAnimeList */
+  filler: boolean
+  recap: boolean
+}
+
+export type EpisodeSource = 'tmdb' | 'jikan' | 'anilist' | 'kitsu'
+
+export const SOURCE_LABEL: Record<EpisodeSource, string> = {
+  tmdb: 'TMDB',
+  jikan: 'MyAnimeList (Jikan)',
+  anilist: 'AniList',
+  kitsu: 'Kitsu',
 }
 
 async function get<T>(path: string): Promise<T | null> {
@@ -43,10 +55,9 @@ async function get<T>(path: string): Promise<T | null> {
 export const getAnimeIds = (anilistId: number) =>
   get<{ ids: AnimeIds | null }>(`/ids/${anilistId}`).then((r) => r?.ids ?? null)
 
-export const getTmdbEpisodes = (anilistId: number, count: number | null) =>
-  get<{ episodes: TmdbEpisode[] | null }>(`/episodes/${anilistId}${count ? `?count=${count}` : ''}`).then(
-    (r) => r?.episodes ?? null,
-  )
+/** Info tiap episode, digabung dari TMDB, MyAnimeList, AniList & Kitsu di server. */
+export const getEpisodeInfo = (anilistId: number) =>
+  get<{ episodes: EpisodeInfo[]; sources: EpisodeSource[] }>(`/episodes/${anilistId}`)
 
 export interface SiteLink {
   label: string

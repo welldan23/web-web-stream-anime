@@ -3,14 +3,14 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowDownUp, Bookmark, BookmarkCheck, Check, Play, Search } from 'lucide-react'
 import { api } from '../lib/api'
-import { shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
+import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { isInWatchlist, toggleWatchlist, useLibrary } from '../lib/library'
 import { cn } from '../lib/cn'
 import BackButton from '../components/BackButton'
 import { AnimeFactCard } from '../components/AnimeFacts'
 import { AniListBanner, AniListStats, Characters, ExternalLinks, NextEpisode, Trailer } from '../components/AniList'
 import { findAniList, seasonLabel } from '../lib/anilist'
-import { databaseLinks, getAnimeIds } from '../lib/animeMeta'
+import { databaseLinks, getAnimeIds, getEpisodeInfo } from '../lib/animeMeta'
 import Seo from '../components/Seo'
 import { ApiError } from '../lib/api'
 import { animeMeta, pageTitle, titleFromSlug, DEFAULT_DESCRIPTION } from '../lib/site'
@@ -49,6 +49,23 @@ export default function AnimePage() {
     staleTime: 1000 * 60 * 60 * 24,
     retry: false,
   })
+  // tanda filler/recap per episode (key sama kayak di halaman nonton biar ke-cache)
+  const { data: episodeInfo } = useQuery({
+    queryKey: ['episode-info', al?.id],
+    queryFn: () => getEpisodeInfo(al!.id),
+    enabled: Boolean(al),
+    staleTime: 1000 * 60 * 60 * 6,
+    retry: false,
+  })
+  const skippable = useMemo(
+    () =>
+      new Map(
+        (episodeInfo?.episodes ?? [])
+          .filter((e) => e.filler || e.recap)
+          .map((e) => [e.number, e.filler ? 'F' : 'R'] as const),
+      ),
+    [episodeInfo],
+  )
   const library = useLibrary()
   const [newestFirst, setNewestFirst] = useState(false)
   const [filter, setFilter] = useState('')
@@ -207,12 +224,24 @@ export default function AnimePage() {
                 />
               </div>
             ) : null}
+            {skippable.size > 0 ? (
+              <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <SkipBadge kind="F" /> Filler
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <SkipBadge kind="R" /> Recap
+                </span>
+                <span className="text-ink-faint">boleh di-skip · data MyAnimeList</span>
+              </p>
+            ) : null}
             {episodes.length === 0 ? (
               <p className="py-4 text-center text-sm text-ink-muted">Belum ada episode.</p>
             ) : (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
                 {episodes.map((e) => {
                   const watched = library.watched.includes(e.episodeId)
+                  const skip = skippable.get(episodeNumber(e.title) ?? -1)
                   return (
                     <Link
                       key={e.episodeId}
@@ -225,6 +254,7 @@ export default function AnimePage() {
                     >
                       {watched ? <Check className="size-3.5" /> : null}
                       <span className="truncate">{shortEpisodeLabel(e.title).replace('Episode ', 'Ep ')}</span>
+                      {skip ? <SkipBadge kind={skip} /> : null}
                     </Link>
                   )
                 })}
@@ -262,5 +292,16 @@ export default function AnimePage() {
         </CardSection>
       ) : null}
     </div>
+  )
+}
+
+function SkipBadge({ kind }: { kind: 'F' | 'R' }) {
+  return (
+    <span
+      title={kind === 'F' ? 'Filler' : 'Recap'}
+      className="rounded bg-warning-50 px-1 text-[10px] font-bold leading-4 text-warning-600"
+    >
+      {kind}
+    </span>
   )
 }

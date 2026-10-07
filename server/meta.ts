@@ -4,22 +4,30 @@
 //     ID anime yang sama di situs lain (MAL, OtakOtaku, SilverYasha, TMDB, ...)
 //     dari AnimeAPI (https://animeapi.my.id). animeapi nggak ngizinin dipanggil
 //     langsung dari browser, makanya lewat sini.
-// - GET /_animeku/meta/episodes/:anilistId?count=12
-//     judul, sinopsis & gambar tiap episode dari TMDB. Butuh TMDB_API_KEY.
-//     `count` = jumlah episode menurut AniList; kalau season di TMDB isinya
-//     lebih banyak (mis. dua cour digabung), datanya nggak dipakai biar nomor
-//     episodenya nggak meleset.
+// - GET /_animeku/meta/episodes/:anilistId
+//     info tiap episode, digabung dari beberapa sumber gratis:
+//       judul + tanda filler/recap  → Jikan (data MyAnimeList)
+//       gambar                      → AniList (Crunchyroll dkk), lalu Kitsu
+//       sinopsis                    → Kitsu
+//       TMDB (kalau ada TMDB_API_KEY) dipakai duluan karena ada bahasa Indonesianya.
+//     Sumber yang error/kosong dilewati aja.
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { clientIp, createCache, createLimiter, json, SERVER_PREFIX, type Next } from './http.ts'
 
 const PREFIX = `${SERVER_PREFIX}/meta`
 const TMDB_IMAGE = 'https://image.tmdb.org/t/p/w300'
+/** Jikan & Kitsu dibatasi segini halaman biar anime super panjang nggak bikin ratusan request. */
+const JIKAN_MAX_PAGES = 15 // 100 episode per halaman
+const KITSU_MAX_PAGES = 10 // 20 episode per halaman
 
 export interface MetaOptions {
-  /** API key (v3) atau Read Access Token (v4) TMDB. Kosong = data episode dimatiin. */
+  /** API key (v3) atau Read Access Token (v4) TMDB. Kosong = TMDB nggak dipakai. */
   tmdbKey?: string
   animeApiUrl?: string
   tmdbUrl?: string
+  anilistUrl?: string
+  jikanUrl?: string
+  kitsuUrl?: string
 }
 
 /** Field AnimeAPI yang dipakai Animeku. */
@@ -51,17 +59,18 @@ const ID_FIELDS: (keyof AnimeIds)[] = [
   'trakt_type', 'trakt_season',
 ]
 
-export interface TmdbEpisode {
+export interface EpisodeInfo {
   number: number
   name: string | null
   overview: string | null
   still: string | null
   airDate: string | null
+  filler: boolean
+  recap: boolean
 }
 
-interface TmdbSeason {
-  episodes: { episode_number: number; name: string; overview: string; still_path: string | null; air_date: string | null }[]
-}
+type EpisodePart = { [K in keyof EpisodeInfo]?: EpisodeInfo[K] | null }
+type Source = 'tmdb' | 'jikan' | 'anilist' | 'kitsu'
 
 class HttpError extends Error {
   status: number
@@ -71,19 +80,30 @@ class HttpError extends Error {
   }
 }
 
-/** TMDB ngisi judul yang belum diterjemahin pakai "Episode 5"; itu dianggap kosong. */
-const realName = (name?: string | null) => (name && !/^(episode|episodio|épisode)\s*\d+$/i.test(name.trim()) ? name.trim() : null)
+/** Judul pengganti kayak "Episode 5" dianggap kosong. */
+const realName = (name?: string | null) =>
+  name && !/^(episode|episodio|épisode|ep\.?)\s*\d+$/i.test(name.trim()) ? name.trim() : null
+const text = (s?: string | null) => s?.replace(/\s+/g, ' ').trim() || null
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export function createMeta(options: MetaOptions = {}) {
-  const animeApiUrl = (options.animeApiUrl || 'https://animeapi.my.id').replace(/\/+$/, '')
-  const tmdbUrl = (options.tmdbUrl || 'https://api.themoviedb.org/3').replace(/\/+$/, '')
+  const base = (url: string | undefined, fallback: string) => (url || fallback).replace(/\/+$/, '')
+  const animeApiUrl = base(options.animeApiUrl, 'https://animeapi.my.id')
+  const tmdbUrl = base(options.tmdbUrl, 'https://api.themoviedb.org/3')
+  const anilistUrl = base(options.anilistUrl, 'https://graphql.anilist.co')
+  const jikanUrl = base(options.jikanUrl, 'https://api.jikan.moe/v4')
+  const kitsuUrl = base(options.kitsuUrl, 'https://kitsu.app/api/edge')
   const tmdbKey = options.tmdbKey ?? ''
   const allowed = createLimiter()
   const idsCache = createCache<AnimeIds | null>(24 * 3600_000)
-  const episodesCache = createCache<TmdbEpisode[] | null>(12 * 3600_000)
+  const episodesCache = createCache<{ episodes: EpisodeInfo[]; sources: Source[] }>(12 * 3600_000)
 
-  async function getJson<T>(url: string, headers: Record<string, string> = {}) {
-    const res = await fetch(url, { headers: { accept: 'application/json', ...headers }, signal: AbortSignal.timeout(8000) })
+  async function getJson<T>(url: string, init: RequestInit = {}) {
+    const res = await fetch(url, {
+      ...init,
+      headers: { accept: 'application/json', 'user-agent': 'Animeku/1.0', ...init.headers },
+      signal: AbortSignal.timeout(10_000),
+    })
     if (!res.ok) throw new HttpError(res.status)
     return (await res.json()) as T
   }
@@ -100,41 +120,188 @@ export function createMeta(options: MetaOptions = {}) {
     })
   }
 
+  // --- AniList: idMal, jumlah episode, judul & gambar dari situs streaming resmi ---
+  async function anilist(anilistId: number) {
+    const query = `query ($id: Int) { Media(id: $id, type: ANIME) { idMal episodes streamingEpisodes { title thumbnail } } }`
+    const body = await getJson<{
+      data: { Media: { idMal: number | null; episodes: number | null; streamingEpisodes: { title: string; thumbnail: string | null }[] } | null }
+    }>(anilistUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query, variables: { id: anilistId } }),
+    })
+    const media = body.data.Media
+    const episodes = new Map<number, EpisodePart>()
+    for (const item of media?.streamingEpisodes ?? []) {
+      // biasanya "Episode 5 - Judulnya"
+      const m = item.title.match(/^Episode\s+(\d+)\s*(?:[-–:]\s*(.*))?$/i)
+      if (!m) continue
+      episodes.set(Number(m[1]), { name: realName(m[2]), still: item.thumbnail })
+    }
+    return { malId: media?.idMal ?? null, count: media?.episodes ?? null, episodes }
+  }
+
+  // --- Jikan: judul + filler/recap. Batasnya ±3 request/detik, jadi antre satu-satu ---
+  let jikanQueue: Promise<unknown> = Promise.resolve()
+  function jikanGet<T>(path: string) {
+    const run = jikanQueue.then(async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await getJson<T>(`${jikanUrl}${path}`)
+        } catch (error) {
+          if (!(error instanceof HttpError && error.status === 429) || attempt >= 2) throw error
+          await sleep(1500 * (attempt + 1))
+        }
+      }
+    })
+    jikanQueue = run.catch(() => {}).then(() => sleep(400))
+    return run
+  }
+
+  async function jikan(malId: number) {
+    const episodes = new Map<number, EpisodePart>()
+    for (let page = 1; page <= JIKAN_MAX_PAGES; page++) {
+      const body = await jikanGet<{
+        data: { mal_id: number; title: string | null; aired: string | null; filler: boolean; recap: boolean }[]
+        pagination: { has_next_page: boolean }
+      }>(`/anime/${malId}/episodes?page=${page}`)
+      for (const e of body.data) {
+        episodes.set(e.mal_id, {
+          name: realName(e.title),
+          airDate: e.aired?.slice(0, 10) ?? null,
+          filler: e.filler,
+          recap: e.recap,
+        })
+      }
+      if (!body.pagination.has_next_page) break
+    }
+    return episodes
+  }
+
+  // --- Kitsu: sinopsis + gambar ---
+  async function kitsu(kitsuId: number) {
+    const episodes = new Map<number, EpisodePart>()
+    for (let page = 0; page < KITSU_MAX_PAGES; page++) {
+      const body = await getJson<{
+        data: {
+          attributes: {
+            number: number | null
+            canonicalTitle: string | null
+            synopsis: string | null
+            airdate: string | null
+            thumbnail: { original?: string } | null
+          }
+        }[]
+        links: { next?: string }
+      }>(`${kitsuUrl}/anime/${kitsuId}/episodes?page[limit]=20&page[offset]=${page * 20}&sort=number`, {
+        headers: { accept: 'application/vnd.api+json' },
+      })
+      for (const { attributes: a } of body.data) {
+        if (!a.number) continue
+        episodes.set(a.number, {
+          name: realName(a.canonicalTitle),
+          overview: text(a.synopsis),
+          still: a.thumbnail?.original ?? null,
+          airDate: a.airdate,
+        })
+      }
+      if (!body.links.next) break
+    }
+    return episodes
+  }
+
+  // --- TMDB (opsional): satu season, nomornya harus cocok sama AniList ---
   function tmdb<T>(path: string, language: string) {
     // key v4 (token panjang "eyJ...") dikirim lewat header, key v3 lewat query
     const bearer = tmdbKey.startsWith('eyJ')
     const params = new URLSearchParams({ language, ...(bearer ? {} : { api_key: tmdbKey }) })
-    return getJson<T>(`${tmdbUrl}${path}?${params}`, bearer ? { authorization: `Bearer ${tmdbKey}` } : {})
+    return getJson<T>(`${tmdbUrl}${path}?${params}`, bearer ? { headers: { authorization: `Bearer ${tmdbKey}` } } : {})
   }
 
-  function tmdbEpisodes(anilistId: number, count: number | null) {
-    return episodesCache(`${anilistId}:${count ?? ''}`, async () => {
-      const ids = await animeIds(anilistId)
-      if (!ids?.themoviedb || ids.themoviedb_type !== 'tv') return null
-      const show = await tmdb<{ seasons: { id: number; season_number: number; episode_count: number }[] }>(
-        `/tv/${ids.themoviedb}`,
-        'id-ID',
-      )
-      const season =
-        show.seasons.find((s) => s.id === ids.themoviedb_season_id) ??
-        show.seasons.find((s) => ids.trakt_season !== null && s.season_number === ids.trakt_season)
-      if (!season) return null
-      if (count !== null && season.episode_count > count) return null
+  type TmdbSeason = {
+    episodes: { episode_number: number; name: string; overview: string; still_path: string | null; air_date: string | null }[]
+  }
 
-      const [id, en] = await Promise.all([
-        tmdb<TmdbSeason>(`/tv/${ids.themoviedb}/season/${season.season_number}`, 'id-ID'),
-        tmdb<TmdbSeason>(`/tv/${ids.themoviedb}/season/${season.season_number}`, 'en-US').catch(() => null),
-      ])
-      return id.episodes.map((e) => {
-        const fallback = en?.episodes.find((x) => x.episode_number === e.episode_number)
-        return {
-          number: e.episode_number,
-          name: realName(e.name) ?? realName(fallback?.name),
-          overview: e.overview?.trim() || fallback?.overview?.trim() || null,
-          still: e.still_path ? `${TMDB_IMAGE}${e.still_path}` : null,
-          airDate: e.air_date || null,
-        }
+  async function tmdbEpisodes(ids: AnimeIds, count: number | null) {
+    const episodes = new Map<number, EpisodePart>()
+    if (!tmdbKey || !ids.themoviedb || ids.themoviedb_type !== 'tv') return episodes
+    const show = await tmdb<{ seasons: { id: number; season_number: number; episode_count: number }[] }>(
+      `/tv/${ids.themoviedb}`,
+      'id-ID',
+    )
+    const season =
+      show.seasons.find((s) => s.id === ids.themoviedb_season_id) ??
+      show.seasons.find((s) => ids.trakt_season !== null && s.season_number === ids.trakt_season)
+    // season di TMDB lebih panjang dari anime-nya (mis. dua cour digabung) → nomor bisa meleset, skip
+    if (!season || (count !== null && season.episode_count > count)) return episodes
+    const [id, en] = await Promise.all([
+      tmdb<TmdbSeason>(`/tv/${ids.themoviedb}/season/${season.season_number}`, 'id-ID'),
+      tmdb<TmdbSeason>(`/tv/${ids.themoviedb}/season/${season.season_number}`, 'en-US').catch(() => null),
+    ])
+    for (const e of id.episodes) {
+      const fallback = en?.episodes.find((x) => x.episode_number === e.episode_number)
+      episodes.set(e.episode_number, {
+        name: realName(e.name) ?? realName(fallback?.name),
+        overview: text(e.overview) ?? text(fallback?.overview),
+        still: e.still_path ? `${TMDB_IMAGE}${e.still_path}` : null,
+        airDate: e.air_date || null,
       })
+    }
+    return episodes
+  }
+
+  function episodeInfo(anilistId: number) {
+    return episodesCache(String(anilistId), async () => {
+      const [al, ids] = await Promise.all([
+        anilist(anilistId).catch(() => null),
+        animeIds(anilistId).catch(() => null),
+      ])
+      const malId = al?.malId ?? ids?.myanimelist ?? null
+      let failed = !al
+      const fail = (name: string) => (error: unknown) => {
+        failed = true
+        console.error(`[meta] ${name} ${anilistId}:`, error instanceof Error ? error.message : error)
+        return null
+      }
+      const [fromTmdb, fromJikan, fromKitsu] = await Promise.all([
+        ids ? tmdbEpisodes(ids, al?.count ?? null).catch(fail('tmdb')) : null,
+        malId ? jikan(malId).catch(fail('jikan')) : null,
+        ids?.kitsu ? kitsu(ids.kitsu).catch(fail('kitsu')) : null,
+      ])
+
+      // urutan = prioritas per kolom
+      const layers: [Source, Map<number, EpisodePart> | null | undefined][] = [
+        ['tmdb', fromTmdb],
+        ['jikan', fromJikan],
+        ['anilist', al?.episodes],
+        ['kitsu', fromKitsu],
+      ]
+      const numbers = new Set(layers.flatMap(([, map]) => [...(map?.keys() ?? [])]))
+      const used = new Set<Source>()
+      const pick = <K extends keyof EpisodeInfo>(n: number, key: K, order: Source[]) => {
+        for (const source of order) {
+          const value = layers.find(([s]) => s === source)?.[1]?.get(n)?.[key]
+          if (value !== undefined && value !== null && value !== '') {
+            used.add(source)
+            return value as EpisodeInfo[K]
+          }
+        }
+        return null
+      }
+      const episodes = [...numbers]
+        .sort((a, b) => a - b)
+        .map((n) => ({
+          number: n,
+          name: pick(n, 'name', ['tmdb', 'jikan', 'anilist', 'kitsu']),
+          overview: pick(n, 'overview', ['tmdb', 'kitsu']),
+          still: pick(n, 'still', ['tmdb', 'anilist', 'kitsu']),
+          airDate: pick(n, 'airDate', ['tmdb', 'jikan', 'kitsu']),
+          filler: pick(n, 'filler', ['jikan']) ?? false,
+          recap: pick(n, 'recap', ['jikan']) ?? false,
+        }))
+      // semua sumber gagal (mis. internet VPS putus) → jangan di-cache kosong 12 jam
+      if (episodes.length === 0 && failed) throw new Error('semua sumber info episode gagal')
+      return { episodes, sources: (['tmdb', 'jikan', 'anilist', 'kitsu'] as Source[]).filter((s) => used.has(s)) }
     })
   }
 
@@ -149,11 +316,7 @@ export function createMeta(options: MetaOptions = {}) {
     const episodes = route.match(/^\/episodes\/(\d{1,9})$/)
     try {
       if (ids) return json(res, 200, { ids: await animeIds(Number(ids[1])) }, cacheable)
-      if (episodes) {
-        if (!tmdbKey) return json(res, 200, { enabled: false, episodes: null }, cacheable)
-        const count = Number(url.searchParams.get('count')) || null
-        return json(res, 200, { enabled: true, episodes: await tmdbEpisodes(Number(episodes[1]), count) }, cacheable)
-      }
+      if (episodes) return json(res, 200, await episodeInfo(Number(episodes[1])), cacheable)
       return json(res, 404, { message: 'Nggak ada.' })
     } catch (error) {
       console.error('[meta]', url.pathname, error instanceof Error ? error.message : error)

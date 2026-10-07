@@ -18,7 +18,14 @@ export default defineConfig(({ mode }) => {
       seoPlugin({ siteUrl: env.VITE_SITE_URL, apiUrl: serverApi, localApiUrl: apiTarget }),
       serverPlugin({
         stats: { file: env.STATS_FILE, password: env.ADMIN_PASSWORD, timeZone: env.STATS_TZ, githubRepo: env.GITHUB_REPO },
-        meta: { tmdbKey: env.TMDB_API_KEY, animeApiUrl: env.ANIMEAPI_URL, tmdbUrl: env.TMDB_API_URL },
+        meta: {
+          tmdbKey: env.TMDB_API_KEY,
+          animeApiUrl: env.ANIMEAPI_URL,
+          tmdbUrl: env.TMDB_API_URL,
+          anilistUrl: env.ANILIST_URL,
+          jikanUrl: env.JIKAN_URL,
+          kitsuUrl: env.KITSU_URL,
+        },
       }),
     ],
     server: {
