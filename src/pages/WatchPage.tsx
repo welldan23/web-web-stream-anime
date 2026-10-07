@@ -72,7 +72,9 @@ export default function WatchPage() {
   })
   const infoFor = (n: number | null) => (n === null ? undefined : episodeInfo?.episodes.find((t) => t.number === n))
   const currentInfo = infoFor(epNumber)
-  const hasStills = Boolean(episodeInfo?.episodes.some((t) => t.still))
+  // kalau gambar-gambar awal gagal semua (link mati), kolom gambar disembunyiin aja
+  const [thumbs, setThumbs] = useState({ loaded: 0, failed: 0 })
+  const hasStills = Boolean(episodeInfo?.episodes.some((t) => t.still)) && !(thumbs.failed >= 3 && thumbs.loaded === 0)
   const animeTitle = anime.data?.title
   const manual = picked?.episodeId === episodeId ? picked.serverId : null
 
@@ -404,16 +406,12 @@ export default function WatchPage() {
                           active ? 'bg-primary-50 font-semibold text-primary-600' : 'text-ink hover:bg-subtle',
                         )}
                       >
-                        {info?.still ? (
-                          <img
-                            src={info.still}
-                            alt=""
-                            loading="lazy"
-                            className="aspect-video w-20 shrink-0 rounded-lg bg-tile object-cover"
+                        {hasStills ? (
+                          <EpisodeThumb
+                            info={info}
+                            onLoad={() => setThumbs((t) => ({ ...t, loaded: t.loaded + 1 }))}
+                            onGiveUp={() => setThumbs((t) => ({ ...t, failed: t.failed + 1 }))}
                           />
-                        ) : hasStills ? (
-                          // episode tanpa gambar tetap dikasih kotak biar barisnya sejajar
-                          <span className="aspect-video w-20 shrink-0 rounded-lg bg-tile" />
                         ) : null}
                         <span className="min-w-0 flex-1">
                           <span className="block truncate">{shortEpisodeLabel(e.title)}</span>
@@ -497,5 +495,28 @@ function EpisodeAbout({ info }: { info: EpisodeInfo }) {
         </>
       ) : null}
     </div>
+  )
+}
+
+/** Gambar kecil episode; kalau gagal dimuat, coba gambar dari sumber berikutnya. Kosong = kotak polos biar sejajar. */
+function EpisodeThumb({ info, onLoad, onGiveUp }: { info?: EpisodeInfo; onLoad: () => void; onGiveUp: () => void }) {
+  const stills = info?.stills ?? (info?.still ? [info.still] : [])
+  const [index, setIndex] = useState(0)
+  const src = stills[index]
+  if (!src) return <span className="aspect-video w-20 shrink-0 rounded-lg bg-tile" />
+  return (
+    <img
+      key={src}
+      src={src}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onLoad={onLoad}
+      onError={() => {
+        if (index + 1 >= stills.length) onGiveUp()
+        setIndex(index + 1)
+      }}
+      className="aspect-video w-20 shrink-0 rounded-lg bg-tile object-cover"
+    />
   )
 }

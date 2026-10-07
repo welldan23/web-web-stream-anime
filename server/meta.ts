@@ -64,6 +64,8 @@ export interface EpisodeInfo {
   name: string | null
   overview: string | null
   still: string | null
+  /** semua gambar yang ketemu, urut prioritas; dipakai kalau gambar pertama gagal dimuat */
+  stills: string[]
   airDate: string | null
   filler: boolean
   recap: boolean
@@ -105,13 +107,16 @@ export function createMeta(options: MetaOptions = {}) {
   const tmdbKey = options.tmdbKey ?? ''
   const allowed = createLimiter()
   const idsCache = createCache<AnimeIds | null>(24 * 3600_000)
-  const episodesCache = createCache<{ episodes: EpisodeInfo[]; sources: Source[]; failed: string[] }>(12 * 3600_000)
+  // hasil lengkap disimpan 12 jam; kalau ada sumber yang error, cuma 20 menit biar cepet dicoba lagi
+  const episodesCache = createCache<{ episodes: EpisodeInfo[]; sources: Source[]; failed: string[] }>((result) =>
+    result.failed.length > 0 ? 20 * 60_000 : 12 * 3600_000,
+  )
 
-  async function getJson<T>(url: string, init: RequestInit = {}) {
+  async function getJson<T>(url: string, init: RequestInit = {}, timeoutMs = 10_000) {
     const res = await fetch(url, {
       ...init,
       headers: { accept: 'application/json', 'user-agent': 'Animeku/1.0', ...init.headers },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) throw new HttpError(res.status)
     return (await res.json()) as T
@@ -150,16 +155,20 @@ export function createMeta(options: MetaOptions = {}) {
     return { malId: media?.idMal ?? null, count: media?.episodes ?? null, episodes }
   }
 
-  // --- Jikan: judul + filler/recap. Batasnya ±3 request/detik, jadi antre satu-satu ---
+  // --- Jikan: judul + filler/recap. Batasnya ±3 request/detik, jadi antre satu-satu.
+  // Jikan ngambil langsung dari MyAnimeList, jadi kadang lambat (>10 detik) atau 5xx; dicoba ulang. ---
   let jikanQueue: Promise<unknown> = Promise.resolve()
   function jikanGet<T>(path: string) {
     const run = jikanQueue.then(async () => {
       for (let attempt = 0; ; attempt++) {
         try {
-          return await getJson<T>(`${jikanUrl}${path}`)
+          return await getJson<T>(`${jikanUrl}${path}`, {}, 25_000)
         } catch (error) {
-          if (!(error instanceof HttpError && error.status === 429) || attempt >= 2) throw error
-          await sleep(1500 * (attempt + 1))
+          const retryable =
+            (error instanceof HttpError && (error.status === 429 || error.status >= 500)) ||
+            (error instanceof Error && (error.name === 'TimeoutError' || error.message === 'fetch failed'))
+          if (!retryable || attempt >= 2) throw error
+          await sleep(2000 * (attempt + 1))
         }
       }
     })
@@ -196,6 +205,7 @@ export function createMeta(options: MetaOptions = {}) {
           attributes: {
             number: number | null
             canonicalTitle: string | null
+            titles: { en?: string; en_us?: string; en_jp?: string } | null
             synopsis: string | null
             airdate: string | null
             thumbnail: { original?: string } | null
@@ -208,7 +218,7 @@ export function createMeta(options: MetaOptions = {}) {
       for (const { attributes: a } of body.data) {
         if (!a.number) continue
         episodes.set(a.number, {
-          name: realName(a.canonicalTitle),
+          name: realName(a.canonicalTitle) ?? realName(a.titles?.en_us ?? a.titles?.en ?? a.titles?.en_jp),
           overview: text(a.synopsis),
           still: a.thumbnail?.original ?? null,
           airDate: a.airdate,
@@ -285,6 +295,17 @@ export function createMeta(options: MetaOptions = {}) {
       ]
       const numbers = new Set(layers.flatMap(([, map]) => [...(map?.keys() ?? [])]))
       const used = new Set<Source>()
+      const all = (n: number, key: 'still', order: Source[]) => {
+        const found: string[] = []
+        for (const source of order) {
+          const value = layers.find(([s]) => s === source)?.[1]?.get(n)?.[key]
+          if (value && !found.includes(value)) {
+            used.add(source)
+            found.push(value)
+          }
+        }
+        return found
+      }
       const pick = <K extends keyof EpisodeInfo>(n: number, key: K, order: Source[]) => {
         for (const source of order) {
           const value = layers.find(([s]) => s === source)?.[1]?.get(n)?.[key]
@@ -297,15 +318,20 @@ export function createMeta(options: MetaOptions = {}) {
       }
       const episodes = [...numbers]
         .sort((a, b) => a - b)
-        .map((n) => ({
+        .map((n) => {
+          // gambar Kitsu duluan: link Crunchyroll lama dari AniList banyak yang udah mati
+          const stills = all(n, 'still', ['tmdb', 'kitsu', 'anilist'])
+          return {
           number: n,
           name: pick(n, 'name', ['tmdb', 'jikan', 'anilist', 'kitsu']),
           overview: pick(n, 'overview', ['tmdb', 'kitsu']),
-          still: pick(n, 'still', ['tmdb', 'anilist', 'kitsu']),
+          still: stills[0] ?? null,
+          stills,
           airDate: pick(n, 'airDate', ['tmdb', 'jikan', 'kitsu']),
           filler: pick(n, 'filler', ['jikan']) ?? false,
           recap: pick(n, 'recap', ['jikan']) ?? false,
-        }))
+          }
+        })
       // semua sumber gagal (mis. internet VPS putus) → jangan di-cache kosong 12 jam
       if (episodes.length === 0 && failed.length > 0) throw new SourcesError(failed)
       return { episodes, sources: (['tmdb', 'jikan', 'anilist', 'kitsu'] as Source[]).filter((s) => used.has(s)), failed }

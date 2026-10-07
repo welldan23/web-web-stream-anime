@@ -27,6 +27,8 @@ export interface EpisodeInfo {
   name: string | null
   overview: string | null
   still: string | null
+  /** semua gambar yang ketemu (urut prioritas), buat cadangan kalau yang pertama gagal dimuat */
+  stills?: string[]
   airDate: string | null
   /** episode filler (cerita di luar manga) / recap (rangkuman), dari MyAnimeList */
   filler: boolean

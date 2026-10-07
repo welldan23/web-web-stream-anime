@@ -38,17 +38,29 @@ export function createLimiter() {
   }
 }
 
-/** Cache di memori dengan umur & batas jumlah; promise disimpan biar request barengan nggak dobel. */
-export function createCache<T>(ttlMs: number, max = 2000) {
-  const items = new Map<string, { at: number; value: Promise<T> }>()
+/**
+ * Cache di memori dengan umur & batas jumlah; promise disimpan biar request barengan nggak dobel.
+ * `ttl` bisa angka, atau fungsi dari hasilnya (mis. hasil yang setengah gagal disimpan lebih sebentar).
+ */
+export function createCache<T>(ttl: number | ((value: T) => number), max = 2000) {
+  const items = new Map<string, { expires: number; value: Promise<T> }>()
   return function cached(key: string, load: () => Promise<T>) {
     const hit = items.get(key)
-    if (hit && Date.now() - hit.at < ttlMs) return hit.value
+    if (hit && Date.now() < hit.expires) return hit.value
     if (items.size >= max) items.delete(items.keys().next().value!)
     const value = load()
-    items.set(key, { at: Date.now(), value })
-    // yang gagal jangan disimpan lama-lama
-    value.catch(() => items.delete(key))
+    // selama masih dimuat, request lain nunggu hasil yang sama
+    const entry = { expires: Date.now() + (typeof ttl === 'number' ? ttl : 10 * 60_000), value }
+    items.set(key, entry)
+    value.then(
+      (result) => {
+        if (typeof ttl === 'function') entry.expires = Date.now() + ttl(result)
+      },
+      // yang gagal jangan disimpan
+      () => {
+        if (items.get(key) === entry) items.delete(key)
+      },
+    )
     return value
   }
 }
