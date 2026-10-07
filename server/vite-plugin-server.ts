@@ -1,13 +1,14 @@
-// Pasang API server Animeku (statistik, dashboard admin, metadata) di
+// Pasang API server Animeku (statistik, dashboard admin, panel ops, metadata) di
 // `npm run dev` dan `npm run preview`, biar bisa dites di laptop tanpa build server.
 import type { Connect, Plugin } from 'vite'
 import { createMeta, type MetaOptions } from './meta.ts'
+import { createOps, type OpsOptions } from './ops.ts'
 import { createStats, type StatsOptions } from './stats.ts'
 
-export default function serverPlugin(options: { stats: StatsOptions; meta: MetaOptions }): Plugin {
+export default function serverPlugin(options: { stats: StatsOptions; meta: MetaOptions; ops?: OpsOptions }): Plugin {
   let handlers: Connect.NextHandleFunction[] | undefined
   const mount = (middlewares: Connect.Server) => {
-    handlers ??= [createStats(options.stats), createMeta(options.meta)].map(
+    handlers ??= [createStats(options.stats), createOps(options.ops), createMeta(options.meta)].map(
       (h): Connect.NextHandleFunction =>
         (req, res, next) =>
           void h.handle(req, res, next),

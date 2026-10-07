@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => {
           jikanUrl: env.JIKAN_URL,
           kitsuUrl: env.KITSU_URL,
         },
+        ops: { token: env.OPS_TOKEN },
       }),
     ],
     server: {

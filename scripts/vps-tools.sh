@@ -58,8 +58,10 @@ case "$action" in
     getent ahosts api.jikan.moe | head -4
     ;;
   restart)
-    pm2 restart animeku --update-env && sleep 3 && pm2 ls
+    pm2 restart animeku --update-env || exit 1
+    sleep 3 && pm2 ls
     echo "Animeku -> $(code "http://127.0.0.1:$port/")"
+    curl -fsS -o /dev/null "http://127.0.0.1:$port/" || exit 1
     ;;
   deploy)
     git pull --ff-only origin master && bash scripts/deploy.sh

@@ -99,6 +99,21 @@ pm2 save && pm2 startup      # biar otomatis nyala lagi kalau VPS restart
 
 Tiap kali update manual: `git pull && npm ci && npm run build && npm run build:server && pm2 restart animeku`.
 
+#### Panel ops lewat HTTPS (tanpa SSH)
+
+Server Animeku punya panel kontrol di `/_animeku/ops` ([`server/ops.ts`](server/ops.ts)). Panel ini **mati** selama `OPS_TOKEN` kosong. Kalau diisi, panel bisa ngejalanin 5 aksi: `status`, `logs`, `check-sources`, `restart`, `deploy`. Nggak ada perintah bebas. Gunanya biar VPS bisa dicek dan di-deploy dari tempat yang cuma bisa akses HTTPS, misalnya sesi Claude Code di cloud.
+
+1. Di VPS: `openssl rand -hex 32`, terus tambahin hasilnya ke `.env` jadi `OPS_TOKEN=hasilnya`. Habis itu update + restart sekali (`git pull && npm ci && npm run build && npm run build:server && pm2 restart animeku`).
+2. Simpan token yang sama di tempat yang butuh. Contohnya pengaturan **environment variables** lingkungan Claude Code: `OPS_TOKEN=hasilnya`. Jangan ditempel di chat atau di-commit.
+3. Pemakaian:
+   ```sh
+   curl -H "Authorization: Bearer $OPS_TOKEN" https://web-kamu/_animeku/ops/status
+   curl -X POST -H "Authorization: Bearer $OPS_TOKEN" https://web-kamu/_animeku/ops/deploy   # → {"id": ...}
+   curl -H "Authorization: Bearer $OPS_TOKEN" https://web-kamu/_animeku/ops/jobs/<id>
+   ```
+
+Token salah ditolak, dan percobaan nebak dibatasi 5 kali per 15 menit per IP. Mau matiin? Hapus `OPS_TOKEN` dari `.env`, terus restart.
+
 #### Deploy otomatis (GitHub Actions)
 
 Biar nggak perlu update manual, `.github/workflows/deploy.yml` bisa SSH ke VPS tiap ada push ke `master`, terus jalanin `git pull` dan [`scripts/deploy.sh`](scripts/deploy.sh). Skrip itu ngelakuin install, build, restart pm2, terus ngecek servernya nyala. Pasangnya cukup sekali:
@@ -251,6 +266,7 @@ capacitor.config.ts, assets/, native/   # aplikasi Android: config, ikon & splas
 .github/workflows/deploy.yml, scripts/deploy.sh   # deploy otomatis ke VPS
 .github/workflows/vps.yml, scripts/vps-tools.sh   # cek/perawatan VPS lewat GitHub
 scripts/ssh-gate.sh                               # satpam kunci deploy (cuma aksi yang diizinin)
+server/ops.ts, scripts/ops-job.sh                 # panel ops lewat HTTPS (OPS_TOKEN)
 ```
 
 ## Catatan
