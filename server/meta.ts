@@ -18,7 +18,7 @@ const PREFIX = `${SERVER_PREFIX}/meta`
 const TMDB_IMAGE = 'https://image.tmdb.org/t/p/w300'
 /** Jikan & Kitsu dibatasi segini halaman biar anime super panjang nggak bikin ratusan request. */
 const JIKAN_MAX_PAGES = 15 // 100 episode per halaman
-const KITSU_MAX_PAGES = 10 // 20 episode per halaman
+const KITSU_MAX_PAGES = 60 // 20 episode per halaman, diambil 5 halaman sekaligus
 
 export interface MetaOptions {
   /** API key (v3) atau Read Access Token (v4) TMDB. Kosong = TMDB nggak dipakai. */
@@ -80,6 +80,15 @@ class HttpError extends Error {
     super(`HTTP ${status}`)
     this.status = status
   }
+}
+
+/** "fetch failed" doang nggak jelas; ambil alasan aslinya (mis. ENOTFOUND, ECONNRESET, ETIMEDOUT). */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error)
+  const cause = error.cause as { code?: string; message?: string } | undefined
+  if (error.name === 'TimeoutError') return 'kelamaan (timeout)'
+  if (cause && (cause.code || cause.message)) return `${error.message} (${[cause.code, cause.message].filter(Boolean).join(': ')})`
+  return error.message
 }
 
 /** Semua sumber info episode gagal; nggak di-cache biar dicoba lagi nanti. */
@@ -197,24 +206,27 @@ export function createMeta(options: MetaOptions = {}) {
   }
 
   // --- Kitsu: sinopsis + gambar ---
+  type KitsuPage = {
+    data: {
+      attributes: {
+        number: number | null
+        canonicalTitle: string | null
+        titles: { en?: string; en_us?: string; en_jp?: string } | null
+        synopsis: string | null
+        airdate: string | null
+        thumbnail: { original?: string } | null
+      }
+    }[]
+    meta?: { count?: number }
+  }
+
   async function kitsu(kitsuId: number) {
     const episodes = new Map<number, EpisodePart>()
-    for (let page = 0; page < KITSU_MAX_PAGES; page++) {
-      const body = await getJson<{
-        data: {
-          attributes: {
-            number: number | null
-            canonicalTitle: string | null
-            titles: { en?: string; en_us?: string; en_jp?: string } | null
-            synopsis: string | null
-            airdate: string | null
-            thumbnail: { original?: string } | null
-          }
-        }[]
-        links: { next?: string }
-      }>(`${kitsuUrl}/anime/${kitsuId}/episodes?page[limit]=20&page[offset]=${page * 20}&sort=number`, {
+    const page = (n: number) =>
+      getJson<KitsuPage>(`${kitsuUrl}/anime/${kitsuId}/episodes?page[limit]=20&page[offset]=${n * 20}&sort=number`, {
         headers: { accept: 'application/vnd.api+json' },
       })
+    const add = (body: KitsuPage) => {
       for (const { attributes: a } of body.data) {
         if (!a.number) continue
         episodes.set(a.number, {
@@ -224,7 +236,14 @@ export function createMeta(options: MetaOptions = {}) {
           airDate: a.airdate,
         })
       }
-      if (!body.links.next) break
+    }
+    const first = await page(0)
+    add(first)
+    // halaman pertama ngasih tahu total episodenya; sisanya diambil 5 halaman sekaligus
+    const pages = Math.min(Math.ceil((first.meta?.count ?? first.data.length) / 20), KITSU_MAX_PAGES)
+    for (let start = 1; start < pages; start += 5) {
+      const batch = Array.from({ length: Math.min(5, pages - start) }, (_, i) => page(start + i))
+      for (const body of await Promise.all(batch)) add(body)
     }
     return episodes
   }
@@ -274,8 +293,8 @@ export function createMeta(options: MetaOptions = {}) {
       // sumber yang error dicatat biar gampang dicek: buka /_animeku/meta/episodes/<id> di browser
       const failed: string[] = []
       const fail = (name: string) => (error: unknown) => {
-        failed.push(`${name}: ${error instanceof Error ? error.message : String(error)}`)
-        console.error(`[meta] ${name} ${anilistId}:`, error instanceof Error ? error.message : error)
+        failed.push(`${name}: ${describeError(error)}`)
+        console.error(`[meta] ${name} ${anilistId}:`, describeError(error))
         return null
       }
       const [al, ids] = await Promise.all([anilist(anilistId).catch(fail('anilist')), animeIds(anilistId).catch(fail('animeapi'))])
