@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { CalendarClock, ExternalLink, Heart, Play, Star, TrendingUp } from 'lucide-react'
 import { compactNumber, countdown, type AniListMedia } from '../lib/anilist'
+import type { SiteLink } from '../lib/animeMeta'
 import { cn } from '../lib/cn'
 import { Card, CardSection, Poster } from './ui'
 
@@ -154,7 +155,7 @@ export function Characters({ media }: { media: AniListMedia }) {
 }
 
 /** Tombol ke AniList & MyAnimeList + keterangan sumber data. */
-export function ExternalLinks({ media }: { media: AniListMedia }) {
+export function ExternalLinks({ media, more = [] }: { media: AniListMedia; more?: SiteLink[] }) {
   const links = [
     { href: media.siteUrl, label: 'AniList' },
     media.idMal ? { href: `https://myanimelist.net/anime/${media.idMal}`, label: 'MyAnimeList' } : null,
@@ -175,7 +176,25 @@ export function ExternalLinks({ media }: { media: AniListMedia }) {
           </a>
         ))}
       </div>
-      <p className="px-1 text-[11px] text-ink-faint">Skor, trailer, karakter & jadwal dari AniList.</p>
+      {more.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {more.map((l) => (
+            <a
+              key={l.label}
+              href={l.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-1.5 text-xs font-semibold text-ink-soft hover:border-ink-faint active:opacity-70"
+            >
+              {l.label}
+              {l.local ? <span className="rounded bg-primary-50 px-1 text-[10px] text-primary-600">ID</span> : null}
+            </a>
+          ))}
+        </div>
+      ) : null}
+      <p className="px-1 text-[11px] text-ink-faint">
+        Skor, trailer, karakter & jadwal dari AniList.{more.length > 0 ? ' Link database lain dari AnimeAPI.' : ''}
+      </p>
     </div>
   )
 }

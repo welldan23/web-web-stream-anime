@@ -10,6 +10,7 @@ import BackButton from '../components/BackButton'
 import { AnimeFactCard } from '../components/AnimeFacts'
 import { AniListBanner, AniListStats, Characters, ExternalLinks, NextEpisode, Trailer } from '../components/AniList'
 import { findAniList, seasonLabel } from '../lib/anilist'
+import { databaseLinks, getAnimeIds } from '../lib/animeMeta'
 import Seo from '../components/Seo'
 import { ApiError } from '../lib/api'
 import { animeMeta, pageTitle, titleFromSlug, DEFAULT_DESCRIPTION } from '../lib/site'
@@ -39,6 +40,14 @@ export default function AnimePage() {
     enabled: Boolean(data),
     staleTime: 1000 * 60 * 60 * 6,
     retry: 1,
+  })
+  // ID anime yang sama di situs database lain (OtakOtaku, Kitsu, TMDB, ...)
+  const { data: ids } = useQuery({
+    queryKey: ['anime-ids', al?.id],
+    queryFn: () => getAnimeIds(al!.id),
+    enabled: Boolean(al),
+    staleTime: 1000 * 60 * 60 * 24,
+    retry: false,
   })
   const library = useLibrary()
   const [newestFirst, setNewestFirst] = useState(false)
@@ -237,7 +246,7 @@ export default function AnimePage() {
           </Card>
           {al ? (
             <div className="pt-2">
-              <ExternalLinks media={al} />
+              <ExternalLinks media={al} more={ids ? databaseLinks(ids) : undefined} />
             </div>
           ) : null}
         </div>

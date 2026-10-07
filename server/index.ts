@@ -1,18 +1,20 @@
 // Server produksi Animeku buat VPS (gantiin `vite preview`):
 // - nyajiin hasil build di dist/ (+ meta tag SEO buat halaman anime/episode)
 // - nerusin /api/* ke wajik-anime-api
-// - statistik & API dashboard admin (/_animeku/*)
+// - statistik & API dashboard admin, metadata anime (/_animeku/*)
 //
 // Build: `npm run build:server`, jalanin: `npm start`.
 // Pengaturan dibaca dari environment atau file .env:
 //   PORT (4173), HOST (0.0.0.0), API_PROXY_TARGET (http://localhost:3001),
-//   VITE_SITE_URL, ADMIN_PASSWORD, STATS_FILE (data/stats.json), STATS_TZ (Asia/Jakarta)
+//   VITE_SITE_URL, ADMIN_PASSWORD, STATS_FILE (data/stats.json), STATS_TZ (Asia/Jakarta),
+//   TMDB_API_KEY (judul & gambar episode)
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import path from 'node:path'
 import { parseTarget, renderPage } from '../seo/render.ts'
+import { createMeta } from './meta.ts'
 import { createStats } from './stats.ts'
 
 try {
@@ -34,6 +36,7 @@ const stats = createStats({
   timeZone: env.STATS_TZ,
   githubRepo: env.GITHUB_REPO,
 })
+const meta = createMeta({ tmdbKey: env.TMDB_API_KEY, animeApiUrl: env.ANIMEAPI_URL, tmdbUrl: env.TMDB_API_URL })
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -113,7 +116,7 @@ const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost')
   if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return proxyApi(req, res)
 
-  stats.handle(req, res, async () => {
+  stats.handle(req, res, () => meta.handle(req, res, async () => {
     try {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         res.statusCode = 405
@@ -132,7 +135,7 @@ const server = createServer((req, res) => {
       if (!res.headersSent) res.statusCode = 500
       res.end()
     }
-  })
+  }))
 })
 
 server.listen(port, host, () => {

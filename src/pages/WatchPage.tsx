@@ -19,6 +19,8 @@ import { recordWatch, useLibrary } from '../lib/library'
 import { track } from '../lib/stats'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { findOploverz } from '../lib/oploverz'
+import { findAniList } from '../lib/anilist'
+import { getTmdbEpisodes } from '../lib/animeMeta'
 import { cn } from '../lib/cn'
 import Seo from '../components/Seo'
 import { DEFAULT_DESCRIPTION, episodeMeta, pageTitle, titleFromSlug } from '../lib/site'
@@ -53,6 +55,24 @@ export default function WatchPage() {
     enabled: Boolean(animeId),
   })
   const epNumber = ep ? episodeNumber(ep.title) : null
+  // judul, sinopsis & gambar episode dari TMDB (kalau ada); key-nya sama kayak di halaman detail biar ke-cache
+  const { data: al } = useQuery({
+    queryKey: ['anilist', animeId],
+    queryFn: () => findAniList(animeId!, anime.data!.title, anime.data!.japanese),
+    enabled: Boolean(anime.data),
+    staleTime: 1000 * 60 * 60 * 6,
+    retry: 1,
+  })
+  const { data: tmdbEpisodes } = useQuery({
+    queryKey: ['tmdb-episodes', al?.id, al?.episodes],
+    queryFn: () => getTmdbEpisodes(al!.id, al!.episodes),
+    enabled: Boolean(al),
+    staleTime: 1000 * 60 * 60 * 6,
+    retry: false,
+  })
+  const tmdbFor = (n: number | null) => (n === null ? undefined : tmdbEpisodes?.find((t) => t.number === n))
+  const tmdbEp = tmdbFor(epNumber)
+  const hasStills = Boolean(tmdbEpisodes?.some((t) => t.still))
   const animeTitle = anime.data?.title
   const manual = picked?.episodeId === episodeId ? picked.serverId : null
 
@@ -229,6 +249,7 @@ export default function WatchPage() {
                   {ep.releaseTime ? ` · ${ep.releaseTime}` : ''}
                 </p>
                 <h1 className="mt-0.5 text-lg font-bold leading-snug text-ink sm:text-xl">{ep.title}</h1>
+                {tmdbEp?.name || tmdbEp?.overview ? <EpisodeAbout key={episodeId} name={tmdbEp.name} overview={tmdbEp.overview} /> : null}
               </>
             ) : (
               <Skeleton className="h-12" />
@@ -370,6 +391,7 @@ export default function WatchPage() {
                 : episodes.map((e, i) => {
                     const active = e.episodeId === episodeId
                     const watched = library.watched.includes(e.episodeId)
+                    const info = tmdbFor(episodeNumber(e.title))
                     return (
                       <Link
                         key={e.episodeId}
@@ -377,12 +399,28 @@ export default function WatchPage() {
                         to={`/nonton/${e.episodeId}`}
                         title={e.title}
                         className={cn(
-                          'flex items-center justify-between gap-2 px-4 py-3 text-[15px] active:opacity-70',
+                          'flex items-center gap-3 px-4 py-3 text-[15px] active:opacity-70',
                           i < episodes.length - 1 && 'border-b border-line',
                           active ? 'bg-primary-50 font-semibold text-primary-600' : 'text-ink hover:bg-subtle',
                         )}
                       >
-                        <span className="truncate">{shortEpisodeLabel(e.title)}</span>
+                        {info?.still ? (
+                          <img
+                            src={info.still}
+                            alt=""
+                            loading="lazy"
+                            className="aspect-video w-20 shrink-0 rounded-lg bg-tile object-cover"
+                          />
+                        ) : hasStills ? (
+                          // episode tanpa gambar tetap dikasih kotak biar barisnya sejajar
+                          <span className="aspect-video w-20 shrink-0 rounded-lg bg-tile" />
+                        ) : null}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{shortEpisodeLabel(e.title)}</span>
+                          {info?.name ? (
+                            <span className="block truncate text-xs font-normal text-ink-muted">{info.name}</span>
+                          ) : null}
+                        </span>
                         {active ? (
                           <Pill>Diputar</Pill>
                         ) : watched ? (
@@ -423,5 +461,23 @@ function EpisodeNav({ to, dir }: { to?: string; dir: 'prev' | 'next' }) {
     >
       {content}
     </Link>
+  )
+}
+
+/** Judul & sinopsis episode dari TMDB, sinopsis bisa dibuka-tutup. */
+function EpisodeAbout({ name, overview }: { name: string | null; overview: string | null }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-2 space-y-1">
+      {name ? <p className="text-[15px] font-semibold text-ink-soft">“{name}”</p> : null}
+      {overview ? (
+        <>
+          <p className={cn('text-sm leading-relaxed text-ink-muted', !open && 'line-clamp-2')}>{overview}</p>
+          <button onClick={() => setOpen((v) => !v)} className="text-xs font-semibold text-primary-500">
+            {open ? 'Tutup' : 'Selengkapnya'}
+          </button>
+        </>
+      ) : null}
+    </div>
   )
 }

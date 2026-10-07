@@ -16,6 +16,9 @@ Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wa
 - **Server video**: tiap episode otomatis dicariin di **Oploverz** dan diputar dari situ (server utama, `src/lib/oploverz.ts`). Kalau episodenya belum ada di Oploverz, otomatis pakai server Otakudesu yang lancar (Vidhide), terus player bawaan kalau masih gagal
 - **Halaman nonton**: pilihan server (Utama Oploverz / Cadangan Otakudesu / Server lain), pilihan diingat buat episode selanjutnya, tombol **blokir pop-up iklan** (pakai `sandbox` di iframe; otomatis dilewati buat Vidhide yang nolak di-sandbox), link **buka di tab baru**, episode sebelumnya/berikutnya, dan daftar episode
 - **Fakta anime**: "Fakta Anime Hari Ini" di beranda & "Tahukah kamu?" di halaman detail (One Piece, Naruto, Demon Slayer, AoT, JJK, HxH, Dragon Ball, dll). Data dari [AnimeFacts](https://github.com/chandan-02/anime-facts-rest-api) (MIT), diterjemahin & disaring, disimpan di `src/data/animeFacts.ts` karena server API aslinya udah mati
+- **Data dari situs lain** (lewat server Animeku, `server/meta.ts`):
+  - Link ke database anime lain di halaman detail. Sumbernya [AnimeAPI](https://animeapi.my.id), termasuk database Indonesia OtakOtaku dan SilverYasha.
+  - Judul, sinopsis, dan gambar tiap episode di halaman nonton. Sumbernya [TMDB](https://www.themoviedb.org) dan butuh `TMDB_API_KEY`. Kalau jumlah episode di TMDB nggak cocok sama AniList (misalnya dua cour digabung), datanya nggak dipakai biar nomor episodenya nggak meleset.
 - **Koleksi** (watchlist) dan **Riwayat** — disimpan di browser (localStorage), nggak perlu login
 - **Dashboard admin** (`/admin`, pakai password): statistik pengunjung, episode ditonton, pencarian, pengguna aplikasi & download APK, grafik per hari, anime & kata kunci terpopuler (lihat "Jalanin di VPS")
 - Responsif: menu pil di header, navigasi bawah di HP
@@ -77,7 +80,10 @@ PORT=4173                                  # sama kayak vite preview, jadi Caddy
 API_PROXY_TARGET=http://localhost:3001     # alamat wajik
 VITE_SITE_URL=https://srv1977175.hstgr.cloud
 ADMIN_PASSWORD=ganti-pakai-password-panjang
+TMDB_API_KEY=                              # opsional: judul, sinopsis & gambar tiap episode
 ```
+
+`TMDB_API_KEY` itu gratis. Caranya: daftar di [themoviedb.org](https://www.themoviedb.org), masuk ke **Settings → API**, terus bikin key tipe *Developer*. Bisa pakai "API Key" yang pendek atau "Read Access Token" yang panjang. Kalau dikosongin, halaman nonton tetap jalan, cuma tanpa judul dan gambar episode.
 
 Matiin `vite preview` yang lama, terus jalanin server barunya pakai pm2 biar tetap nyala walau terminal ditutup:
 
@@ -188,7 +194,7 @@ src/
 api/meta.ts       # fungsi Vercel: suntik meta tag SEO ke halaman anime & episode
 seo/render.ts     # logika suntik meta tag (dipakai Vercel & localhost)
 seo/              # plugin Vite: sitemap.xml, robots.txt, preconnect, meta tag di dev/preview
-server/           # server produksi buat VPS + statistik & API dashboard admin
+server/           # server produksi buat VPS: statistik, dashboard admin, metadata (AnimeAPI/TMDB)
 capacitor.config.ts, assets/, native/   # aplikasi Android: config, ikon & splash, MainActivity
 .github/workflows/android.yml           # build APK otomatis
 ```

@@ -12,8 +12,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-
-export const STATS_PREFIX = '/_animeku'
+import { clientIp, createLimiter, json, SERVER_PREFIX as STATS_PREFIX, type Next } from './http.ts'
 
 interface Day {
   views: number
@@ -41,8 +40,6 @@ export interface StatsOptions {
   githubRepo?: string
 }
 
-type Next = (err?: unknown) => void
-
 const KEEP_DAYS = 120
 const MAX_KEYS_PER_DAY = 3000
 const SESSION_DAYS = 30
@@ -61,14 +58,6 @@ function entryFor<T>(map: Record<string, T>, key: string, create: () => T) {
   return (map[key] = create())
 }
 
-function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
-  res.statusCode = status
-  res.setHeader('content-type', 'application/json; charset=utf-8')
-  res.setHeader('cache-control', 'no-store')
-  for (const [k, v] of Object.entries(headers)) res.setHeader(k, v)
-  res.end(JSON.stringify(body))
-}
-
 async function readBody(req: IncomingMessage, limit = 4096) {
   let size = 0
   const chunks: Buffer[] = []
@@ -79,15 +68,6 @@ async function readBody(req: IncomingMessage, limit = 4096) {
   }
   const text = Buffer.concat(chunks).toString('utf-8')
   return text ? (JSON.parse(text) as Record<string, unknown>) : {}
-}
-
-/** IP pengunjung. X-Forwarded-For cuma dipercaya kalau request datang dari reverse proxy lokal (Caddy/Nginx). */
-function clientIp(req: IncomingMessage) {
-  const remote = req.socket.remoteAddress ?? ''
-  const local = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1'
-  const forwarded = req.headers['x-forwarded-for']
-  if (local && typeof forwarded === 'string') return forwarded.split(',')[0].trim()
-  return remote
 }
 
 function readCookie(req: IncomingMessage, name: string) {
@@ -147,18 +127,7 @@ export function createStats(options: StatsOptions = {}) {
   }
 
   // batas kiriman per IP biar file nggak dibanjiri
-  const buckets = new Map<string, { count: number; reset: number }>()
-  function allowed(key: string, limit: number, windowMs: number) {
-    const now = Date.now()
-    const bucket = buckets.get(key)
-    if (!bucket || bucket.reset < now) {
-      if (buckets.size > 10_000) buckets.clear()
-      buckets.set(key, { count: 1, reset: now + windowMs })
-      return true
-    }
-    bucket.count += 1
-    return bucket.count <= limit
-  }
+  const allowed = createLimiter()
 
   function record(req: IncomingMessage, body: Record<string, unknown>) {
     const ua = req.headers['user-agent'] ?? ''
@@ -324,9 +293,9 @@ export function createStats(options: StatsOptions = {}) {
   /** Middleware ala connect: dipasang di server produksi & di `vite dev/preview`. */
   async function handle(req: IncomingMessage, res: ServerResponse, next: Next) {
     const url = new URL(req.url ?? '/', 'http://localhost')
-    if (!url.pathname.startsWith(`${STATS_PREFIX}/`)) return next()
+    const route = url.pathname.startsWith(`${STATS_PREFIX}/`) ? url.pathname.slice(STATS_PREFIX.length) : ''
+    if (route !== '/e' && !route.startsWith('/admin/')) return next()
     await ready
-    const route = url.pathname.slice(STATS_PREFIX.length)
 
     try {
       if (route === '/e' && req.method === 'POST') {
