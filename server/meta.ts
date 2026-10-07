@@ -96,6 +96,8 @@ function describeError(error: unknown): string {
   return error.message
 }
 
+class NotFoundError extends Error {}
+
 /** Semua sumber info episode gagal; nggak di-cache biar dicoba lagi nanti. */
 class SourcesError extends Error {
   failed: string[]
@@ -151,13 +153,19 @@ export function createMeta(options: MetaOptions = {}) {
   // --- AniList: idMal, jumlah episode, judul & gambar dari situs streaming resmi ---
   async function anilist(anilistId: number) {
     const query = `query ($id: Int) { Media(id: $id, type: ANIME) { idMal episodes streamingEpisodes { title thumbnail } } }`
-    const body = await getJson<{
+    type Body = {
       data: { Media: { idMal: number | null; episodes: number | null; streamingEpisodes: { title: string; thumbnail: string | null }[] } | null }
-    }>(anilistUrl, {
+    }
+    const body = await getJson<Body>(anilistUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ query, variables: { id: anilistId } }),
+    }).catch((error) => {
+      // AniList jawab 404 kalau ID-nya nggak ada; itu bukan error koneksi
+      if (error instanceof HttpError && error.status === 404) return null
+      throw error
     })
+    if (!body) return null
     const media = body.data.Media
     const episodes = new Map<number, EpisodePart>()
     for (const item of media?.streamingEpisodes ?? []) {
@@ -303,6 +311,7 @@ export function createMeta(options: MetaOptions = {}) {
         return null
       }
       const [al, ids] = await Promise.all([anilist(anilistId).catch(fail('anilist')), animeIds(anilistId).catch(fail('animeapi'))])
+      if (al === null && !ids && failed.length === 0) throw new NotFoundError()
       const malId = al?.malId ?? ids?.myanimelist ?? null
       const [fromTmdb, fromJikan, fromKitsu] = await Promise.all([
         ids ? tmdbEpisodes(ids, al?.count ?? null).catch(fail('tmdb')) : null,
@@ -379,6 +388,8 @@ export function createMeta(options: MetaOptions = {}) {
       return json(res, 404, { message: 'Nggak ada.' })
     } catch (error) {
       console.error('[meta]', url.pathname, error instanceof Error ? error.message : error)
+      if (error instanceof NotFoundError)
+        return json(res, 404, { message: 'Anime dengan ID AniList ini nggak ada. Cek lagi angkanya (ambil dari link anilist.co/anime/ID).' })
       const failed = error instanceof SourcesError ? error.failed : undefined
       return json(res, 502, { message: 'Sumber data lagi nggak bisa dihubungi.', failed })
     }
