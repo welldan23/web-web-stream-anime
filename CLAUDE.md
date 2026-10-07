@@ -9,9 +9,11 @@ server utama video Oploverz. Penjelasan lengkap ada di README.md.
 
 ## VPS produksi
 
-- Web: https://srv1977175.hstgr.cloud (Caddy → `npm start` = `dist-server/index.js` lewat pm2, nama `animeku`, port 4173).
-- wajik-anime-api jalan di VPS yang sama (`http://localhost:3001`).
-- SSH dari sesi cloud **nggak bisa** (proxy cuma ngeloloskan HTTPS), jadi pakai panel ops di bawah.
+- Web: https://srv1977175.hstgr.cloud → container Docker (`node dist-server/index.js`, folder `/app`, port 4173).
+- wajik-anime-api di container lain: `http://wajik-anime-api:3001`.
+- **Update otomatis:** tiap push ke `master`, container di-build ulang sendiri ±5 menit kemudian
+  (env `SOURCE_COMMIT` = commit yang jalan). Nggak perlu deploy manual; cek lewat panel `status`.
+- Diurus pemilik pakai Codex di VPS. SSH dari sesi cloud **nggak bisa** (proxy cuma HTTPS).
 
 ### Panel ops (server/ops.ts)
 
@@ -22,13 +24,11 @@ B=https://srv1977175.hstgr.cloud/_animeku/ops
 curl -sS -H "Authorization: Bearer $OPS_TOKEN" $B/status          # server, pm2, versi kode, cek Animeku & wajik
 curl -sS -H "Authorization: Bearer $OPS_TOKEN" $B/logs            # log pm2
 curl -sS -H "Authorization: Bearer $OPS_TOKEN" $B/check-sources   # VPS → Jikan/Kitsu/AniList/dll (IPv4 & IPv6)
-curl -sS -X POST -H "Authorization: Bearer $OPS_TOKEN" $B/deploy  # git pull + build + restart → {"id": ...}
-curl -sS -X POST -H "Authorization: Bearer $OPS_TOKEN" $B/restart
-curl -sS -H "Authorization: Bearer $OPS_TOKEN" $B/jobs/<id>       # hasil deploy/restart (tunggu sampai ada "[selesai, kode keluar N]")
 ```
 
-Jangan pernah nampilin isi `OPS_TOKEN`. Setelah push kode, deploy lewat panel ini lalu cek hasilnya
-di web. Info episode bisa dicek di `/_animeku/meta/episodes/<anilistId>` (lihat field `failed`).
+`restart`/`deploy` di panel cuma buat server non-Docker (pm2); di VPS ini balikin 501.
+Jangan pernah nampilin isi `OPS_TOKEN`. Setelah push, tunggu sampai `status` nunjukin
+`Versi kode (build)` = commit baru, lalu cek hasilnya di web. Info episode bisa dicek di `/_animeku/meta/episodes/<anilistId>` (lihat field `failed`).
 
 ## Hal yang udah diketahui
 

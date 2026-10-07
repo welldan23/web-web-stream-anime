@@ -13,6 +13,7 @@
 // nggak ada perintah bebas.
 import { execFile, spawn } from 'node:child_process'
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
@@ -49,6 +50,7 @@ export function createOps(options: OpsOptions = {}) {
   const jobsDir = path.join(appDir, 'data', 'ops')
   const allowed = createLimiter()
   const running = new Set<string>()
+  const inDocker = existsSync('/.dockerenv') || Boolean(process.env.SOURCE_COMMIT)
 
   function runTool(action: string) {
     return new Promise<string>((resolve) => {
@@ -103,6 +105,11 @@ export function createOps(options: OpsOptions = {}) {
       }
 
       if (req.method === 'POST' && (JOB_ACTIONS as readonly string[]).includes(route)) {
+        // di Docker nggak ada git/pm2; container di-build ulang otomatis dari luar tiap ada push
+        if (inDocker)
+          return json(res, 501, {
+            message: 'Server ini jalan di Docker dan update otomatis tiap push ke master; restart/deploy lewat panel nggak dipakai.',
+          })
         if (running.has(route)) return json(res, 409, { message: `${route} lagi jalan, tunggu dulu.` })
         running.add(route)
         setTimeout(() => running.delete(route), 60_000)
