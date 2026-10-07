@@ -128,7 +128,15 @@ Biar nggak perlu update manual, `.github/workflows/deploy.yml` bisa SSH ke VPS t
 
 4. Coba jalanin: tab **Actions → Deploy VPS → Run workflow**. Kalau hijau, berarti udah otomatis.
 
-Selama secret-nya belum diisi, workflow ini dilewatin aja, jadi nggak bikin error. Mau berhenti? Hapus secret `VPS_SSH_KEY`, atau hapus baris `github-deploy-animeku` dari `~/.ssh/authorized_keys` di VPS. File `.env` di VPS nggak ikut ke-update atau ketimpa.
+Selama secret-nya belum diisi, workflow ini dilewatin aja, jadi nggak bikin error.
+
+Pakai secret yang sama, ada juga workflow **VPS tools** (`.github/workflows/vps.yml` + [`scripts/vps-tools.sh`](scripts/vps-tools.sh)) buat ngecek VPS dari GitHub tanpa SSH manual. Buka **Actions → VPS tools → Run workflow**, terus pilih aksinya:
+
+- `status`: kondisi server, pm2, versi kode, cek Animeku & wajik
+- `logs`: log pm2
+- `check-sources`: cek VPS bisa nyambung ke Jikan, Kitsu, AniList, dll (IPv4 & IPv6)
+- `restart`: restart Animeku
+- `deploy`: update + build + restart Mau berhenti? Hapus secret `VPS_SSH_KEY`, atau hapus baris `github-deploy-animeku` dari `~/.ssh/authorized_keys` di VPS. File `.env` di VPS nggak ikut ke-update atau ketimpa.
 
 **Dashboard admin** ada di `https://web-kamu/admin`. Masuknya pakai `ADMIN_PASSWORD`. Isinya:
 
@@ -233,6 +241,7 @@ server/           # server produksi buat VPS: statistik, dashboard admin, metada
 capacitor.config.ts, assets/, native/   # aplikasi Android: config, ikon & splash, MainActivity
 .github/workflows/android.yml           # build APK otomatis
 .github/workflows/deploy.yml, scripts/deploy.sh   # deploy otomatis ke VPS
+.github/workflows/vps.yml, scripts/vps-tools.sh   # cek/perawatan VPS lewat GitHub
 ```
 
 ## Catatan
