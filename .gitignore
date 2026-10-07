@@ -29,3 +29,6 @@ dist-ssr
 # Server produksi & data statistik dashboard
 dist-server
 /data/
+
+# Pengaturan rahasia (password admin, API key)
+.env

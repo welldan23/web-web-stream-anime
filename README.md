@@ -97,7 +97,38 @@ pm2 start npm --name animeku -- start
 pm2 save && pm2 startup      # biar otomatis nyala lagi kalau VPS restart
 ```
 
-Tiap kali update: `git pull && npm ci && npm run build && npm run build:server && pm2 restart animeku`.
+Tiap kali update manual: `git pull && npm ci && npm run build && npm run build:server && pm2 restart animeku`.
+
+#### Deploy otomatis (GitHub Actions)
+
+Biar nggak perlu update manual, `.github/workflows/deploy.yml` bisa SSH ke VPS tiap ada push ke `master`, terus jalanin `git pull` dan [`scripts/deploy.sh`](scripts/deploy.sh). Skrip itu ngelakuin install, build, restart pm2, terus ngecek servernya nyala. Pasangnya cukup sekali:
+
+1. Di VPS, bikin kunci SSH khusus deploy, terus izinin kunci itu masuk:
+   ```sh
+   ssh-keygen -t ed25519 -f ~/.ssh/animeku_deploy -N "" -C "github-deploy-animeku"
+   cat ~/.ssh/animeku_deploy.pub >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+2. Masih di VPS, ambil tiga hal ini buat disalin:
+   ```sh
+   cat ~/.ssh/animeku_deploy              # kunci privat → secret VPS_SSH_KEY
+   ssh-keyscan -p 22 IP_VPS_KAMU 2>/dev/null   # ganti IP_VPS_KAMU, hasilnya → VPS_KNOWN_HOSTS
+   pwd                                    # jalanin di folder project → VPS_APP_DIR
+   ```
+3. Di GitHub: **Settings → Secrets and variables → Actions → New repository secret**, isi:
+
+   | Secret | Isi |
+   |---|---|
+   | `VPS_HOST` | IP VPS, mis. `145.79.11.57` |
+   | `VPS_USER` | user SSH, mis. `root` |
+   | `VPS_SSH_KEY` | seluruh isi `~/.ssh/animeku_deploy` (dari `-----BEGIN` sampai `-----END ...-----`) |
+   | `VPS_KNOWN_HOSTS` | hasil perintah `ssh-keyscan` di atas |
+   | `VPS_APP_DIR` | folder project di VPS, mis. `/root/web-web-stream-anime` |
+   | `VPS_PORT` | (opsional) kalau port SSH bukan 22 |
+
+4. Coba jalanin: tab **Actions → Deploy VPS → Run workflow**. Kalau hijau, berarti udah otomatis.
+
+Selama secret-nya belum diisi, workflow ini dilewatin aja, jadi nggak bikin error. Mau berhenti? Hapus secret `VPS_SSH_KEY`, atau hapus baris `github-deploy-animeku` dari `~/.ssh/authorized_keys` di VPS. File `.env` di VPS nggak ikut ke-update atau ketimpa.
 
 **Dashboard admin** ada di `https://web-kamu/admin`. Masuknya pakai `ADMIN_PASSWORD`. Isinya:
 
@@ -201,6 +232,7 @@ seo/              # plugin Vite: sitemap.xml, robots.txt, preconnect, meta tag d
 server/           # server produksi buat VPS: statistik, dashboard admin, metadata (AnimeAPI/TMDB)
 capacitor.config.ts, assets/, native/   # aplikasi Android: config, ikon & splash, MainActivity
 .github/workflows/android.yml           # build APK otomatis
+.github/workflows/deploy.yml, scripts/deploy.sh   # deploy otomatis ke VPS
 ```
 
 ## Catatan
