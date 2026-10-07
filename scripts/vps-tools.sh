@@ -11,8 +11,10 @@ export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
 port="$(grep -E '^PORT=' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || true)"
 port="${port:-4173}"
-wajik="$(grep -E '^API_PROXY_TARGET=' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]' || true)"
+# di Docker pengaturannya biasanya lewat environment, bukan .env
+wajik="${API_PROXY_TARGET:-$(grep -E '^API_PROXY_TARGET=' .env 2>/dev/null | cut -d= -f2- | tr -d '[:space:]' || true)}"
 wajik="${wajik:-http://localhost:3001}"
+port="${PORT:-$port}"
 
 section() { printf '\n===== %s =====\n' "$1"; }
 # code URL [TIMEOUT] [opsi curl lain...] -> "200 (0.3s)" atau pesan error curl
@@ -28,9 +30,25 @@ case "$action" in
     uptime; df -h / | tail -1; free -m | sed -n 2p
     echo "Node $(node -v 2>/dev/null || echo '-'), pm2 $(pm2 -v 2>/dev/null || echo '-')"
     section "Kode"
-    git log -1 --format='%h %s (%cr)'; git status --short | head -20
+    if command -v git >/dev/null && [ -d .git ]; then
+      git log -1 --format='%h %s (%cr)'; git status --short | head -20
+    elif ! command -v git >/dev/null; then
+      echo "git nggak ada di sini (kemungkinan jalan di Docker)"
+      [ -f .git/HEAD ] && echo ".git/HEAD: $(cat .git/HEAD)"
+    else
+      echo "folder ini bukan repo git"
+    fi
+    echo "Folder: $(pwd), file server dibuat: $(date -r dist-server/index.js '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '-')"
+    echo "Versi kode (build): ${SOURCE_COMMIT:-${COMMIT_SHA:-${GIT_COMMIT:-${RAILWAY_GIT_COMMIT_SHA:--}}}}"
+    section "Lingkungan"
+    if [ -f /.dockerenv ] || grep -qa docker /proc/1/cgroup 2>/dev/null || [ "$(stat -f -c %T / 2>/dev/null)" = overlayfs ]; then
+      echo "Jalan di dalam container (Docker)"
+    fi
+    # cuma NAMA variabel penanda platform (nggak nampilin isinya)
+    env | cut -d= -f1 | grep -E '^(COOLIFY|DOKPLOY|CAPROVER|RAILWAY|RENDER|NIXPACKS|PORTAINER|HOSTINGER|EASYPANEL|SOURCE_COMMIT|HOSTNAME$)' | sort | tr '\n' ' '; echo
+    echo "Proses: $(ps -o args= -p 1 2>/dev/null || cat /proc/1/cmdline 2>/dev/null | tr '\0' ' ')"
     section "pm2"
-    pm2 ls
+    if command -v pm2 >/dev/null; then pm2 ls; else echo "pm2 nggak ada di sini"; fi
     section "Cek lokal"
     echo "Animeku  http://127.0.0.1:$port/            -> $(code "http://127.0.0.1:$port/")"
     echo "Wajik    $wajik/otakudesu/home -> $(code "$wajik/otakudesu/home" 20)"
