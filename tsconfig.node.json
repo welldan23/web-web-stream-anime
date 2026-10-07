@@ -19,5 +19,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "capacitor.config.ts", "seo/**/*.ts", "api/**/*.ts", "src/lib/site.ts"]
+  "include": ["vite.config.ts", "vite.server.config.ts", "capacitor.config.ts", "server/**/*.ts", "seo/**/*.ts", "api/**/*.ts", "src/lib/site.ts"]
 }

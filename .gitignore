@@ -25,3 +25,7 @@ dist-ssr
 
 # Proyek Android dibikin ulang otomatis di GitHub Actions (npx cap add android)
 /android/
+
+# Server produksi & data statistik dashboard
+dist-server
+/data/

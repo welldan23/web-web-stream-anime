@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage'
 const AnimePage = lazy(() => import('./pages/AnimePage'))
 const WatchPage = lazy(() => import('./pages/WatchPage'))
 const ImageSearchPage = lazy(() => import('./pages/ImageSearchPage'))
+const AdminPage = lazy(() => import('./pages/AdminPage'))
 const browse = () => import('./pages/BrowsePages')
 const library = () => import('./pages/LibraryPages')
 const SchedulePage = lazy(() => browse().then((m) => ({ default: m.SchedulePage })))
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="nonton/:episodeId" element={<WatchPage />} />
         <Route path="koleksi" element={<WatchlistPage />} />
         <Route path="riwayat" element={<HistoryPage />} />
+        <Route path="admin" element={<AdminPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

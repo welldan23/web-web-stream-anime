@@ -16,6 +16,7 @@ import {
   type ServerOption,
 } from '../lib/servers'
 import { recordWatch, useLibrary } from '../lib/library'
+import { track } from '../lib/stats'
 import { episodeNumber, shortEpisodeLabel, sortEpisodesAsc } from '../lib/episodes'
 import { findOploverz } from '../lib/oploverz'
 import { cn } from '../lib/cn'
@@ -128,13 +129,15 @@ export default function WatchPage() {
   const animeSettled = !animeId || anime.isSuccess || anime.isError
   useEffect(() => {
     if (!ep || !animeSettled) return
+    const title = anime.data?.title ?? ep.title.replace(/\s*episode.*$/i, '')
     recordWatch({
       animeId: ep.animeId,
-      animeTitle: anime.data?.title ?? ep.title.replace(/\s*episode.*$/i, ''),
+      animeTitle: title,
       poster: anime.data?.poster ?? '',
       episodeId,
       episodeTitle: ep.title,
     })
+    track({ t: 'watch', animeId: ep.animeId, title, episodeId })
   }, [ep, animeSettled, anime.data, episodeId])
 
   const episodes = useMemo(() => {

@@ -17,6 +17,7 @@ Frontend ini ngambil data dari **[wajik-anime-api](https://github.com/wajik45/wa
 - **Halaman nonton**: pilihan server (Utama Oploverz / Cadangan Otakudesu / Server lain), pilihan diingat buat episode selanjutnya, tombol **blokir pop-up iklan** (pakai `sandbox` di iframe; otomatis dilewati buat Vidhide yang nolak di-sandbox), link **buka di tab baru**, episode sebelumnya/berikutnya, dan daftar episode
 - **Fakta anime**: "Fakta Anime Hari Ini" di beranda & "Tahukah kamu?" di halaman detail (One Piece, Naruto, Demon Slayer, AoT, JJK, HxH, Dragon Ball, dll). Data dari [AnimeFacts](https://github.com/chandan-02/anime-facts-rest-api) (MIT), diterjemahin & disaring, disimpan di `src/data/animeFacts.ts` karena server API aslinya udah mati
 - **Koleksi** (watchlist) dan **Riwayat** — disimpan di browser (localStorage), nggak perlu login
+- **Dashboard admin** (`/admin`, pakai password): statistik pengunjung, episode ditonton, pencarian, pengguna aplikasi & download APK, grafik per hari, anime & kata kunci terpopuler (lihat "Jalanin di VPS")
 - Responsif: menu pil di header, navigasi bawah di HP
 
 ## Teknologi
@@ -54,6 +55,52 @@ Waktu `npm run dev`, semua request ke `/api/*` diteruskan Vite ke `http://localh
 npm run build    # hasil di folder dist/
 npm run preview
 ```
+
+### Jalanin di VPS (+ dashboard admin)
+
+Di VPS, pakai server bawaan Animeku (`server/index.ts`) sebagai pengganti `vite preview`. Server ini:
+
+- nampilin web,
+- nerusin `/api` ke wajik,
+- nyatet statistik buat dashboard `/admin`.
+
+```sh
+git pull
+npm ci
+npm run build && npm run build:server
+```
+
+Bikin file `.env` di folder project:
+
+```sh
+PORT=4173                                  # sama kayak vite preview, jadi Caddy nggak perlu diubah
+API_PROXY_TARGET=http://localhost:3001     # alamat wajik
+VITE_SITE_URL=https://srv1977175.hstgr.cloud
+ADMIN_PASSWORD=ganti-pakai-password-panjang
+```
+
+Matiin `vite preview` yang lama, terus jalanin server barunya pakai pm2 biar tetap nyala walau terminal ditutup:
+
+```sh
+npm i -g pm2
+pm2 start npm --name animeku -- start
+pm2 save && pm2 startup      # biar otomatis nyala lagi kalau VPS restart
+```
+
+Tiap kali update: `git pull && npm ci && npm run build && npm run build:server && pm2 restart animeku`.
+
+**Dashboard admin** ada di `https://web-kamu/admin`. Masuknya pakai `ADMIN_PASSWORD`. Isinya:
+
+- jumlah pengunjung, halaman dibuka, episode ditonton, pencarian, pengguna aplikasi Android, dan download APK, dibandingin sama periode sebelumnya,
+- grafik per hari (7 atau 30 hari),
+- anime paling banyak ditonton, kata yang paling sering dicari, dan pencarian yang nggak ketemu hasilnya.
+
+Catatan:
+
+- **Statistiknya anonim.** IP pengunjung nggak disimpan. Pengunjung dihitung pakai kode acak yang ganti tiap hari, jadi nggak bisa dilacak.
+- Datanya disimpan di `data/stats.json` dan disimpan 120 hari. Jangan dihapus kalau nggak mau statistiknya ilang.
+- Angka download APK diambil dari GitHub. Angkanya mulai dari nol lagi tiap ada build APK baru, karena rilisnya dibikin ulang.
+- Dashboard nggak jalan di Vercel, karena Vercel nggak punya tempat nyimpen file permanen. Pakai VPS.
 
 ### Deploy ke Vercel
 
@@ -141,6 +188,7 @@ src/
 api/meta.ts       # fungsi Vercel: suntik meta tag SEO ke halaman anime & episode
 seo/render.ts     # logika suntik meta tag (dipakai Vercel & localhost)
 seo/              # plugin Vite: sitemap.xml, robots.txt, preconnect, meta tag di dev/preview
+server/           # server produksi buat VPS + statistik & API dashboard admin
 capacitor.config.ts, assets/, native/   # aplikasi Android: config, ikon & splash, MainActivity
 .github/workflows/android.yml           # build APK otomatis
 ```

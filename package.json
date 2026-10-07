@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "android:sync": "npm run build && cap sync android"
+    "android:sync": "npm run build && cap sync android",
+    "build:server": "vite build --config vite.server.config.ts",
+    "start": "node dist-server/index.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

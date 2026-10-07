@@ -2,6 +2,7 @@ import { Suspense, useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Bookmark, CalendarDays, Home, LayoutGrid, Search } from 'lucide-react'
 import { cn } from '../lib/cn'
+import { track } from '../lib/stats'
 import SearchBox from './SearchBox'
 import { Skeleton } from './ui'
 
@@ -58,6 +59,7 @@ export default function Layout() {
 
   useEffect(() => {
     window.scrollTo({ top: 0 })
+    if (!pathname.startsWith('/admin')) track({ t: 'view' })
   }, [pathname])
 
   return (

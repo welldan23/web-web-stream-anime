@@ -1,11 +1,12 @@
 // Halaman daftar: Sedang Tayang, Sudah Tamat, Cari, Genre, Jadwal, A–Z
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { ChevronRight, ImageUp, Search, SearchX } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { DAYS, normalizeDay, todayName } from '../lib/days'
 import { cn } from '../lib/cn'
+import { track } from '../lib/stats'
 import SearchBox from '../components/SearchBox'
 import Seo from '../components/Seo'
 import { breadcrumb, pageTitle } from '../lib/site'
@@ -135,6 +136,12 @@ export function SearchPage() {
     queryFn: () => api.search(q),
     enabled: q.length > 0,
   })
+
+  // catat buat statistik dashboard (termasuk pencarian yang nggak ada hasilnya)
+  const noResults = error instanceof ApiError && error.status === 404
+  useEffect(() => {
+    if (q && (data || noResults)) track({ t: 'search', q, results: data?.length ?? 0 })
+  }, [q, data, noResults])
 
   return (
     <div className="space-y-4">

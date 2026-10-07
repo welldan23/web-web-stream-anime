@@ -119,6 +119,7 @@ export default function seoPlugin({ siteUrl, apiUrl, localApiUrl }: Options): Pl
         // halaman pribadi/pencarian udah noindex; nggak perlu di-crawl
         'Disallow: /koleksi',
         'Disallow: /riwayat',
+        'Disallow: /admin',
         ...(site ? ['', `Sitemap: ${site}/sitemap.xml`] : []),
         '',
       ].join('\n')
