@@ -1,5 +1,6 @@
 # Alat VPS: jalanin perintah cek/perawatan di VPS lewat GitHub (Actions → VPS tools → Run workflow).
-# Pakai secret yang sama kayak deploy.yml. Perintahnya terbatas di scripts/vps-tools.sh:
+# Pakai secret yang sama kayak deploy.yml. Di VPS, kunci deploy dikunci sama scripts/ssh-gate.sh,
+# jadi cuma aksi di bawah ini yang bisa jalan (isi aksinya di scripts/vps-tools.sh):
 #   status        kondisi server, pm2, versi kode, cek Animeku & wajik
 #   logs          log pm2 Animeku & proses lain
 #   check-sources cek VPS bisa nyambung ke Jikan/Kitsu/AniList/animeapi/otakudesu (IPv4 & IPv6)
@@ -36,8 +37,6 @@ jobs:
       VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
       ACTION: ${{ inputs.action }}
     steps:
-      - uses: actions/checkout@v4
-
       - name: Cek secret
         run: |
           for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_KNOWN_HOSTS VPS_APP_DIR; do
@@ -57,4 +56,4 @@ jobs:
       - name: Jalanin "${{ inputs.action }}" di VPS
         run: |
           ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" -o StrictHostKeyChecking=yes -o BatchMode=yes \
-            "$VPS_USER@$VPS_HOST" "cd '$VPS_APP_DIR' && bash -s -- '$ACTION'" < scripts/vps-tools.sh
+            "$VPS_USER@$VPS_HOST" "$ACTION"

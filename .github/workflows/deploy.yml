@@ -1,12 +1,14 @@
-# Deploy otomatis ke VPS tiap ada push ke master: SSH ke VPS, `git pull`,
-# terus jalanin scripts/deploy.sh (build + restart pm2).
+# Deploy otomatis ke VPS tiap ada push ke master: SSH ke VPS dan minta aksi "deploy".
+# Di VPS, kunci deploy dikunci sama scripts/ssh-gate.sh (cuma boleh status/logs/check-sources/
+# restart/deploy); "deploy" = `git pull` + scripts/deploy.sh (build + restart pm2).
 #
 # Isi di Settings → Secrets and variables → Actions → Secrets:
 #   VPS_HOST         alamat VPS, mis. 145.79.11.57
 #   VPS_USER         user SSH, mis. root
 #   VPS_SSH_KEY      isi kunci privat khusus deploy (lihat README "Deploy otomatis")
 #   VPS_KNOWN_HOSTS  hasil `ssh-keyscan` VPS, biar yakin nyambung ke VPS yang bener
-#   VPS_APP_DIR      folder project di VPS, mis. /root/web-web-stream-anime
+#   VPS_APP_DIR      folder project di VPS, mis. /root/web-web-stream-anime (buat ngecek aja;
+#                    folder yang dipakai beneran ditulis di authorized_keys)
 #   VPS_PORT         (opsional) port SSH, default 22
 # Selama secret-nya belum diisi, deploy dilewatin (nggak bikin error).
 name: Deploy VPS
@@ -61,5 +63,4 @@ jobs:
         if: steps.check.outputs.ready == 'true'
         run: |
           ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" -o StrictHostKeyChecking=yes -o BatchMode=yes \
-            "$VPS_USER@$VPS_HOST" \
-            "set -e; cd '$VPS_APP_DIR' && git pull --ff-only origin master && bash scripts/deploy.sh"
+            "$VPS_USER@$VPS_HOST" deploy

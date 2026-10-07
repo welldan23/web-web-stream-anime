@@ -103,17 +103,23 @@ Tiap kali update manual: `git pull && npm ci && npm run build && npm run build:s
 
 Biar nggak perlu update manual, `.github/workflows/deploy.yml` bisa SSH ke VPS tiap ada push ke `master`, terus jalanin `git pull` dan [`scripts/deploy.sh`](scripts/deploy.sh). Skrip itu ngelakuin install, build, restart pm2, terus ngecek servernya nyala. Pasangnya cukup sekali:
 
-1. Di VPS, bikin kunci SSH khusus deploy, terus izinin kunci itu masuk:
+1. Di VPS, masuk ke folder project, terus pasang "satpam" dan kunci khusus deploy. Satpam ini bikin kunci itu **cuma boleh** ngejalanin `status`, `logs`, `check-sources`, `restart`, dan `deploy`. Kunci itu nggak bisa buka terminal, nggak bisa ngejalanin perintah lain, dan nggak bisa jadi jembatan ke tempat lain:
    ```sh
+   git pull
+   install -m 755 scripts/ssh-gate.sh /usr/local/bin/animeku-ssh-gate      # kalau bukan root: pakai sudo
    ssh-keygen -t ed25519 -f ~/.ssh/animeku_deploy -N "" -C "github-deploy-animeku"
-   cat ~/.ssh/animeku_deploy.pub >> ~/.ssh/authorized_keys
+   echo "command=\"/usr/local/bin/animeku-ssh-gate $(pwd)\",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty $(cat ~/.ssh/animeku_deploy.pub)" >> ~/.ssh/authorized_keys
    chmod 600 ~/.ssh/authorized_keys
+   ssh -i ~/.ssh/animeku_deploy -o StrictHostKeyChecking=accept-new localhost status   # tes: harus keluar status server
+   ssh -i ~/.ssh/animeku_deploy localhost "ls /"                                      # tes: harus "Ditolak"
    ```
-2. Masih di VPS, ambil tiga hal ini buat disalin:
+   Satpamnya sengaja dipasang di luar folder project, biar nggak bisa diganti lewat `git pull`.
+2. Masih di VPS, ambil data buat GitHub:
    ```sh
-   cat ~/.ssh/animeku_deploy              # kunci privat → secret VPS_SSH_KEY
+   whoami                                 # → VPS_USER
+   cat ~/.ssh/animeku_deploy              # kunci privat → VPS_SSH_KEY
    ssh-keyscan -p 22 IP_VPS_KAMU 2>/dev/null   # ganti IP_VPS_KAMU, hasilnya → VPS_KNOWN_HOSTS
-   pwd                                    # jalanin di folder project → VPS_APP_DIR
+   pwd                                    # → VPS_APP_DIR
    ```
 3. Di GitHub: **Settings → Secrets and variables → Actions → New repository secret**, isi:
 
@@ -136,7 +142,9 @@ Pakai secret yang sama, ada juga workflow **VPS tools** (`.github/workflows/vps.
 - `logs`: log pm2
 - `check-sources`: cek VPS bisa nyambung ke Jikan, Kitsu, AniList, dll (IPv4 & IPv6)
 - `restart`: restart Animeku
-- `deploy`: update + build + restart Mau berhenti? Hapus secret `VPS_SSH_KEY`, atau hapus baris `github-deploy-animeku` dari `~/.ssh/authorized_keys` di VPS. File `.env` di VPS nggak ikut ke-update atau ketimpa.
+- `deploy`: update + build + restart
+
+Mau berhenti? Hapus baris `github-deploy-animeku` dari `~/.ssh/authorized_keys` di VPS (akses langsung putus), atau hapus secret `VPS_SSH_KEY`. Aktifin juga **2FA di akun GitHub**, karena siapa pun yang bisa ngubah repo ini bisa nyuruh deploy. File `.env` di VPS nggak ikut ke-update atau ketimpa.
 
 **Dashboard admin** ada di `https://web-kamu/admin`. Masuknya pakai `ADMIN_PASSWORD`. Isinya:
 
@@ -242,6 +250,7 @@ capacitor.config.ts, assets/, native/   # aplikasi Android: config, ikon & splas
 .github/workflows/android.yml           # build APK otomatis
 .github/workflows/deploy.yml, scripts/deploy.sh   # deploy otomatis ke VPS
 .github/workflows/vps.yml, scripts/vps-tools.sh   # cek/perawatan VPS lewat GitHub
+scripts/ssh-gate.sh                               # satpam kunci deploy (cuma aksi yang diizinin)
 ```
 
 ## Catatan
